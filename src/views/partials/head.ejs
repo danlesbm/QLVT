@@ -53,6 +53,9 @@
       </div>
     </div>
     <main class="content">
+      <% if (locals.error) { %>
+        <div class="alert alert-danger" role="alert"><i class="bi bi-exclamation-triangle me-1"></i><%= error %></div>
+      <% } %>
       <% if (flash) { %>
         <div class="alert alert-<%= flash.type %> alert-dismissible fade show" role="alert"><%= flash.message %><button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
       <% } %>

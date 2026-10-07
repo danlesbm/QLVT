@@ -7,6 +7,7 @@ npm install
 npm run seed:demo        # dữ liệu demo (SSO giả lập)
 npm start                # http://localhost:3000
 npm test
+npm run backup           # sao lưu CSDL vào BACKUP_DIR (nhớ sao lưu kèm UPLOAD_DIR)
 ```
 
 Yêu cầu Node.js ≥ 22.13. Cấu hình xem `.env.example`. Mô tả đầy đủ yêu cầu, chức năng và việc còn lại: [TONG-QUAN.md](TONG-QUAN.md).

@@ -57,6 +57,7 @@ async function requestWorkbook(db, r, items) {
   const hr = 14;
   head.forEach((h, i) => put(ws, ws.getRow(hr).getCell(i + 1).address, h, { font: C, alignment: center, border: true }));
   ws.getRow(hr).height = 36;
+  ws.pageSetup.printTitlesRow = `${hr}:${hr}`;
   items.forEach((it, i) => {
     const row = ws.getRow(hr + 1 + i);
     const vals = [
@@ -90,8 +91,10 @@ async function requestWorkbook(db, r, items) {
   }
   ws.getRow(y).height = 34;
   y += 7;
-  put(ws, `A${y}`, 'Nơi nhận:', { font: { bold: true, underline: true, size: 11 } });
-  mergePut(ws, `B${y + 1}:I${y + 1}`, `- Bản scan: Giám đốc, P. Giám đốc, PKT, Phòng Kế hoạch, Giám đốc ${r.factory_name}, Người lập phiếu.`, { font: { size: 11 } });
+  mergePut(ws, `A${y}:B${y}`, 'Nơi nhận:', { font: { bold: true, underline: true, size: 11 }, alignment: { wrapText: false } });
+  const fill = (t) => String(t || '').replace(/\{nha_may\}/g, r.factory_name);
+  const recipients = [s.request_cc_hard && `- Bản cứng: ${fill(s.request_cc_hard)}`, s.request_cc_scan && `- Bản scan: ${fill(s.request_cc_scan)}`].filter(Boolean);
+  recipients.forEach((line, i) => mergePut(ws, `B${y + 1 + i}:I${y + 1 + i}`, line, { font: { size: 11 } }));
   return wb;
 }
 
@@ -130,6 +133,7 @@ async function issueWorkbook(db, x, items) {
   for (const ref of ['A10', 'B10', 'C10', 'D10', 'E10', 'F10', 'G10', 'H10', 'A11', 'B11', 'C11', 'D11', 'G11', 'H11']) ws.getCell(ref).border = BORDER;
   ws.getRow(10).height = 22;
   ws.getRow(11).height = 30;
+  ws.pageSetup.printTitlesRow = '10:11';
 
   let y = 12;
   items.forEach((it, i) => {
@@ -144,7 +148,8 @@ async function issueWorkbook(db, x, items) {
   put(ws, `E${y}`, items.reduce((a, it) => a + Number(it.qty_requested || 0), 0), { font: b, alignment: center, border: true });
   put(ws, `F${y}`, items.reduce((a, it) => a + Number(it.qty_actual || 0), 0), { font: b, alignment: center, border: true });
   y += 1;
-  const ad = dateParts(x.approved_at || x.created_at);
+  // Ngày ký chỉ điền khi GĐ nhà máy đã duyệt
+  const ad = x.approved_at ? dateParts(x.approved_at) : { d: '.....', m: '.....', y: '..........' };
   mergePut(ws, `E${y}:H${y}`, `Ngày ${ad.d} tháng ${ad.m} năm ${ad.y}`, { font: { italic: true }, alignment: center });
   y += 2;
   const sign = [['A', 'B', 'LẬP PHIẾU', x.creator_name], ['C', 'E', 'NGƯỜI NHẬN HÀNG', x.receiver_name], ['F', 'H', 'GIÁM ĐỐC NHÀ MÁY', x.approver_name || '']];
@@ -170,6 +175,7 @@ async function stockWorkbook(db, rows, title) {
     vals.forEach((v, j) => put(ws, ws.getRow(5 + i).getCell(j + 1).address, v, { border: true, font: { size: 11 } }));
   });
   ws.views = [{ state: 'frozen', ySplit: 4 }];
+  ws.pageSetup.printTitlesRow = '4:4';
   return wb;
 }
 

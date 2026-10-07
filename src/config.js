@@ -9,13 +9,16 @@ try {
 }
 
 const env = process.env;
+const root = path.join(__dirname, '..');
 const list = (v) => (v || '').split(',').map((s) => s.trim()).filter(Boolean);
 
 module.exports = {
   port: Number(env.PORT || 3000),
   baseUrl: env.BASE_URL || `http://localhost:${env.PORT || 3000}`,
-  dbFile: env.DB_FILE || path.join(__dirname, '..', 'data', 'qlvt.db'),
-  uploadDir: env.UPLOAD_DIR || path.join(__dirname, '..', 'data', 'uploads'),
+  // Đường dẫn tương đối tính từ thư mục ứng dụng (không phụ thuộc thư mục đang đứng khi chạy)
+  dbFile: env.DB_FILE === ':memory:' ? ':memory:' : path.resolve(root, env.DB_FILE || 'data/qlvt.db'),
+  uploadDir: path.resolve(root, env.UPLOAD_DIR || 'data/uploads'),
+  backupDir: path.resolve(root, env.BACKUP_DIR || 'data/backup'),
   sessionHours: Number(env.SESSION_HOURS || 12),
   cookieSecure: env.COOKIE_SECURE === '1',
   // SSO: "mock" (phát triển/demo) hoặc "oidc" (SSO thật của công ty)

@@ -61,7 +61,7 @@ function list(db, access, user, { status, factoryId, q, page = 1, pageSize = 30 
     where.push(`(x.factory_id IN (${(ids.length ? ids : [0]).map(() => '?').join(',')}) OR x.created_by = ?)`);
     params.push(...(ids.length ? ids : [0]), user.id);
   }
-  if (status) {
+  if (typeof status === 'string' && status) {
     where.push('x.status = ?');
     params.push(status);
   }
@@ -136,8 +136,9 @@ function log(db, x, action, to, user, comment) {
 
 function create(db, user, access, data) {
   const factoryId = Number(data.factory_id);
-  if (!db.one('SELECT 1 FROM factories WHERE id = ? AND active = 1', factoryId)) throw new AppError('Chưa chọn kho xuất');
+  if (!factoryId) throw new AppError('Chưa chọn kho xuất');
   if (!can(access, 'issue.create', factoryId)) throw new AppError('Bạn không có quyền lập phiếu xuất cho kho này', 403);
+  if (!db.one('SELECT 1 FROM factories WHERE id = ? AND active = 1', factoryId)) throw new AppError('Chưa chọn kho xuất');
   const header = writeHeader(data);
   const list = parseItems(db, factoryId, data.items);
   return db.tx(() => {
@@ -185,9 +186,15 @@ function act(db, user, access, id, action, data = {}) {
           const seq = (db.one('SELECT MAX(seq) m FROM issues WHERE factory_id = ? AND year = ?', x.factory_id, year).m || 0) + 1;
           db.run('UPDATE issues SET seq = ?, year = ?, number = ? WHERE id = ?', seq, year, `PXK-${x.factory_code}-${year}-${String(seq).padStart(4, '0')}`, id);
         }
-        // Kiểm tra trước tồn kho để thủ kho biết sớm
+        // Kiểm tra trước tồn kho để thủ kho biết sớm (cộng dồn các dòng cùng vật tư)
+        const need = new Map();
         for (const it of items(db, id)) {
-          if ((it.stock_qty || 0) < it.qty_actual) throw new AppError(`Không đủ tồn kho: ${it.code} - ${it.name} (tồn ${it.stock_qty || 0}, xuất ${it.qty_actual})`);
+          const e = need.get(it.material_id) || { ...it, total: 0 };
+          e.total += it.qty_actual;
+          need.set(it.material_id, e);
+        }
+        for (const e of need.values()) {
+          if ((e.stock_qty || 0) < e.total) throw new AppError(`Không đủ tồn kho: ${e.code} - ${e.name} (tồn ${e.stock_qty || 0}, xuất ${e.total})`);
         }
         set('CHO_DUYET');
         break;

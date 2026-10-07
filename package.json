@@ -13,6 +13,7 @@
     "seed:demo": "node --disable-warning=ExperimentalWarning scripts/seed-demo.js",
     "import:tonkho": "node --disable-warning=ExperimentalWarning scripts/import-tonkho.js",
     "sso:sync": "node --disable-warning=ExperimentalWarning scripts/sso-sync.js",
+    "backup": "node --disable-warning=ExperimentalWarning scripts/backup.js",
     "test": "node --disable-warning=ExperimentalWarning --test test/*.test.js"
   },
   "license": "UNLICENSED",

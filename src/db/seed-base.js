@@ -24,10 +24,16 @@ const SETTINGS = {
   request_recipient: 'Ban giám đốc Công ty CP ĐTPT Bắc Minh',
   // Ai ký mục "Phòng Kỹ thuật - Kiểm tra" trên phiếu: 'reviewer' (người kiểm soát) hoặc 'head' (TP Kỹ thuật)
   pkt_signer: 'reviewer',
+  // Nơi nhận in cuối phiếu nhu cầu; {nha_may} được thay bằng tên nhà máy
+  request_cc_hard: 'Đ/c. Điệp',
+  request_cc_scan: 'Giám đốc, P. Giám đốc, PKT, Đ/c. Điệp, Giám đốc {nha_may}, Người lập PNCVT, {nha_may};',
   max_quoters: '3',
 };
 
 function seedBase(db) {
+  // Cài đặt mới bổ sung ở các phiên bản sau cũng được thêm vào CSDL đang dùng
+  const s = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
+  for (const [k, v] of Object.entries(SETTINGS)) s.run(k, v);
   const has = db.prepare('SELECT COUNT(*) n FROM roles').get().n;
   if (has) return;
   db.exec('BEGIN');
@@ -35,8 +41,6 @@ function seedBase(db) {
   for (const role of DEFAULT_ROLES) r.run(role.name, role.description, JSON.stringify(role.permissions));
   const f = db.prepare('INSERT OR IGNORE INTO factories (code, name, warehouse_code, warehouse_name, request_prefix, sort) VALUES (?, ?, ?, ?, ?, ?)');
   FACTORIES.forEach((x, i) => f.run(x.code, x.name, x.warehouse_code, `Kho ${x.name}`, x.request_prefix, i + 1));
-  const s = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
-  for (const [k, v] of Object.entries(SETTINGS)) s.run(k, v);
   db.exec('COMMIT');
 }
 

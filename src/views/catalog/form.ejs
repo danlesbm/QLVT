@@ -13,7 +13,7 @@
       <div class="col-md-6"><label class="form-label">Gợi ý mã theo nhóm / tiền tố</label>
         <div class="input-group">
           <input name="prefix" class="form-control" list="groups" placeholder="vd 1-01-00-00-02-02">
-          <button class="btn btn-outline-secondary" data-suggest-code>Lấy mã tiếp theo</button>
+          <button type="button" class="btn btn-outline-secondary" data-suggest-code>Lấy mã tiếp theo</button>
         </div>
         <datalist id="groups"><% groups.forEach(g => { %><option value="<%= g.code %>"><%= g.name %></option><% }) %></datalist></div>
       <div class="col-md-4"><label class="form-label">Mã vật tư <span class="text-danger">*</span></label><input name="code" class="form-control" value="<%= m.code || '' %>" required></div>

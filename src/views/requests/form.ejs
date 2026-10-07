@@ -10,8 +10,8 @@
     <% } else { %>
     <div class="row g-3">
       <div class="col-md-4"><label class="form-label">Nhà máy / bộ phận đề xuất <span class="text-danger">*</span></label>
-        <select name="factory_id" class="form-select" <%= row.id ? 'disabled' : '' %>>
-          <% factories.forEach(f => { %><option value="<%= f.id %>" <%= f.id === row.factory_id ? 'selected' : '' %>><%= f.name %></option><% }) %>
+        <select name="factory_id" class="form-select" data-clear-materials <%= row.id ? 'disabled' : '' %>>
+          <% factories.forEach(f => { %><option value="<%= f.id %>" <%= String(f.id) === String(row.factory_id) ? 'selected' : '' %>><%= f.name %></option><% }) %>
         </select>
         <% if (row.id) { %><input type="hidden" name="factory_id" value="<%= row.factory_id %>"><% } %>
       </div>
@@ -25,7 +25,7 @@
     <div class="card-header d-flex align-items-center">Danh sách vật tư đề xuất
       <button class="btn btn-sm btn-outline-primary ms-auto" data-add-row="#items"><i class="bi bi-plus-lg"></i> Thêm dòng</button></div>
     <div class="table-responsive">
-      <table class="table table-sm table-items mb-0" id="items" data-rows="#item-tpl">
+      <table class="table table-sm table-items mb-0" id="items" data-rows="#item-tpl" data-next="<%= items.length %>">
         <thead><tr><th>STT</th><th>Tên vật tư (gõ để tìm mã)</th><th>Mã hiệu / Nước SX</th><th>Thông số kỹ thuật</th><th>Mã thiết bị</th><th>ĐVT</th><th>Số lượng</th><th>Thời điểm SD</th><th>Mục đích sử dụng</th><th>Ghi chú</th><th></th></tr></thead>
         <tbody>
           <% items.forEach((it, i) => { %>

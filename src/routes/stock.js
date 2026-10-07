@@ -1,4 +1,5 @@
 'use strict';
+const crypto = require('node:crypto');
 const express = require('express');
 const stock = require('../services/stock');
 const imp = require('../services/import-tonkho');
@@ -23,10 +24,15 @@ module.exports = (db) => {
   });
 
   r.get('/xuat-excel', requirePerm('stock.view'), async (req, res) => {
-    const { factory_id: factoryId, q, ton } = req.query;
-    const data = stock.list(db, req.access, { factoryId, q, onlyInStock: ton === '1', pageSize: 100000 });
-    const f = factoryId ? db.one('SELECT name FROM factories WHERE id = ?', factoryId) : null;
-    const title = `BÁO CÁO TỒN KHO ${f ? '- ' + f.name.toUpperCase() : 'CÁC NHÀ MÁY'} (ngày ${new Date().toLocaleDateString('vi-VN')})`;
+    const { q, ton } = req.query;
+    const visible = factoriesFor(db, req.access, 'stock.view');
+    const fid = Number(req.query.factory_id) || null;
+    const f = fid ? visible.find((x) => x.id === fid) : null;
+    if (fid && !f) return forbidden(res, 'Bạn không có quyền xem kho này.');
+    const data = stock.list(db, req.access, { factoryId: f ? f.id : undefined, q, onlyInStock: ton === '1', pageSize: 100000 });
+    const all = visible.length === db.one('SELECT COUNT(*) n FROM factories WHERE active = 1').n;
+    const scope = f ? f.name : all ? 'CÁC NHÀ MÁY' : visible.map((x) => x.name).join(', ');
+    const title = `BÁO CÁO TỒN KHO - ${scope.toUpperCase()} (ngày ${new Date().toLocaleDateString('vi-VN')})`;
     await sendWorkbook(res, await stockWorkbook(db, data.rows, title), `ton-kho-${new Date().toISOString().slice(0, 10)}.xlsx`);
   });
 
@@ -42,7 +48,10 @@ module.exports = (db) => {
       if (!row || !can(req.access, 'stock.edit', row.factory_id)) return forbidden(res);
     }
     const preMaterial = !row && req.query.material_id ? db.one('SELECT id, code, name, unit FROM materials WHERE id = ?', Number(req.query.material_id)) : null;
-    res.render('stock/form', { title: row ? 'Cập nhật vật tư trong kho' : 'Nhập thêm vật tư vào kho', row, preMaterial, editable, query: req.query });
+    res.render('stock/form', {
+      title: row ? 'Cập nhật vật tư trong kho' : 'Nhập thêm vật tư vào kho', row, preMaterial, editable, query: req.query,
+      formToken: row ? null : crypto.randomUUID(),
+    });
   });
 
   r.post('/luu', (req, res) => {
