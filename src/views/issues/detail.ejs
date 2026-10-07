@@ -8,7 +8,7 @@
   </div>
   <div class="d-flex gap-2 align-items-start no-print">
     <% if (acts.has('edit')) { %><a href="/xuat-kho/<%= row.id %>/sua" class="btn btn-outline-primary"><i class="bi bi-pencil"></i> Sửa</a><% } %>
-    <a href="/xuat-kho/<%= row.id %>/excel" class="btn btn-success"><i class="bi bi-file-earmark-excel"></i> Tải phiếu BM.06</a>
+    <% if (row.status !== 'DA_HUY') { %><a href="/xuat-kho/<%= row.id %>/excel" class="btn btn-success"><i class="bi bi-file-earmark-excel"></i> Tải phiếu BM.06</a><% } %>
   </div>
 </div></div>
 <div class="row g-3">

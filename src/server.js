@@ -10,6 +10,7 @@ async function sync() {
   try {
     const r = await runSync(db);
     console.log(`[SSO] Đồng bộ ${r.employees} CBCNV, ${r.departments} bộ phận, ${r.positions} chức vụ`);
+    for (const w of r.warnings) console.warn(`[SSO] ${w}`);
   } catch (err) {
     console.error('[SSO] Đồng bộ thất bại:', err.message);
   }

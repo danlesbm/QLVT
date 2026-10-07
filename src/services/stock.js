@@ -59,25 +59,40 @@ function list(db, access, { factoryId, q, page = 1, pageSize = 50, onlyInStock }
   return { rows, total, page, pages };
 }
 
-/** Thêm vật tư vào kho hoặc chỉnh số lượng/tình trạng (quyền stock.edit theo nhà máy). */
+/**
+ * Nhập thêm vật tư vào kho (mode=add: cộng số lượng nhập) hoặc cập nhật một dòng tồn
+ * (mode=set: đặt số lượng tồn thực tế, kèm kiểm tra chống ghi đè). Quyền stock.edit theo nhà máy.
+ */
 function save(db, user, access, data) {
   const factoryId = Number(data.factory_id);
   if (!can(access, 'stock.edit', factoryId)) throw new AppError('Bạn không có quyền nhập vật tư cho kho này', 403);
   const materialId = Number(data.material_id);
-  const material = db.one('SELECT * FROM materials WHERE id = ?', materialId);
+  const material = materialId ? db.one('SELECT * FROM materials WHERE id = ?', materialId) : null;
   if (!material) throw new AppError('Chưa chọn mã vật tư');
   if (material.factory_id && material.factory_id !== factoryId) throw new AppError('Mã vật tư này là mã riêng của nhà máy khác');
+  const mode = data.mode === 'add' ? 'add' : 'set';
   const qty = num(data.quantity);
-  if (qty == null || qty < 0) throw new AppError('Số lượng không hợp lệ');
+  if (qty == null || qty < 0 || (mode === 'add' && qty === 0)) throw new AppError(mode === 'add' ? 'Số lượng nhập thêm phải lớn hơn 0' : 'Số lượng không hợp lệ');
   return db.tx(() => {
     const cur = db.one('SELECT * FROM stock WHERE factory_id = ? AND material_id = ?', factoryId, materialId);
     const before = cur ? cur.quantity : 0;
-    if (qty !== before || !cur) {
-      move(db, { factoryId, materialId, delta: qty - before, kind: cur ? 'DIEU_CHINH' : 'NHAP', note: str(data.reason) || (cur ? 'Điều chỉnh số lượng' : 'Nhập thêm vật tư'), userId: user.id });
+    let delta = qty;
+    if (mode === 'set') {
+      // Chống ghi đè: nếu tồn đã thay đổi (xuất kho / nhập kho) trong lúc đang mở form thì không lưu
+      if (data.expected_quantity !== undefined && data.expected_quantity !== '' && num(data.expected_quantity) !== before) {
+        throw new AppError(`Tồn kho vừa thay đổi (hiện còn ${before}). Vui lòng mở lại để cập nhật theo số mới.`, 409);
+      }
+      delta = qty - before;
     }
+    if (delta !== 0 || !cur) {
+      const kind = mode === 'add' || !cur ? 'NHAP' : 'DIEU_CHINH';
+      move(db, { factoryId, materialId, delta, kind, note: str(data.reason) || (kind === 'NHAP' ? 'Nhập thêm vật tư' : 'Điều chỉnh số lượng'), userId: user.id });
+    }
+    // Khi nhập thêm, chỉ ghi đè tình trạng / vị trí / ghi chú nếu người dùng có nhập
+    const keep = (field) => (mode === 'add' && !str(data[field]) && cur ? cur[field] : str(data[field]));
     db.run(
       `UPDATE stock SET condition = ?, location = ?, note = ?, updated_at = datetime('now','localtime') WHERE factory_id = ? AND material_id = ?`,
-      str(data.condition), str(data.location), str(data.note), factoryId, materialId,
+      keep('condition'), keep('location'), keep('note'), factoryId, materialId,
     );
     return db.one('SELECT * FROM stock WHERE factory_id = ? AND material_id = ?', factoryId, materialId);
   });

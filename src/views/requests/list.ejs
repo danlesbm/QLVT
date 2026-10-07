@@ -6,10 +6,9 @@
     <% }) %>
   </ul>
   <form class="row g-2 align-items-end mb-3" method="get">
-    <input type="hidden" name="status" value="<%= query.status || '' %>">
     <div class="col-md-3"><select name="factory_id" class="form-select" onchange="this.form.submit()"><option value="">Tất cả nhà máy</option>
       <% factories.forEach(f => { %><option value="<%= f.id %>" <%= String(query.factory_id) === String(f.id) ? 'selected' : '' %>><%= f.name %></option><% }) %></select></div>
-    <div class="col-md-3"><select name="status" class="form-select" onchange="this.form.submit()"><option value="">Mọi trạng thái</option>
+    <div class="col-md-3"><select name="status" class="form-select" onchange="this.form.submit()"><option value="">Mọi trạng thái</option><option value="DANG_XU_LY" <%= query.status === 'DANG_XU_LY' ? 'selected' : '' %>>Đang xử lý (chưa xong)</option>
       <% Object.entries(STATUS).forEach(([k, st]) => { %><option value="<%= k %>" <%= query.status === k ? 'selected' : '' %>><%= st.label %></option><% }) %></select></div>
     <div class="col-md-3"><input name="q" class="form-control" value="<%= query.q || '' %>" placeholder="Số phiếu, tiêu đề, tên vật tư..."></div>
     <div class="col-md-3 d-flex gap-2 justify-content-md-end">

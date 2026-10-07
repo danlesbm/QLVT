@@ -20,9 +20,17 @@
           <% } %>
           <input type="hidden" name="material_id" data-f="material_id" value="<%= mid %>">
         </div>
-        <div class="col-md-3"><label class="form-label">Số lượng tồn <span class="text-danger">*</span></label>
-          <input name="quantity" type="number" step="any" min="0" class="form-control" value="<%= pre.quantity ?? '' %>" required>
-          <div class="form-text">Nhập số lượng tồn thực tế sau khi cập nhật.</div></div>
+        <% if (row) { %>
+        <input type="hidden" name="mode" value="set"><input type="hidden" name="expected_quantity" value="<%= row.quantity %>">
+        <div class="col-md-3"><label class="form-label">Số lượng tồn thực tế <span class="text-danger">*</span></label>
+          <input name="quantity" type="number" step="any" min="0" class="form-control" value="<%= row.quantity %>" required>
+          <div class="form-text">Tồn hiện tại: <%= h.num(row.quantity) %>. Sửa nếu kiểm kê thấy khác.</div></div>
+        <% } else { %>
+        <input type="hidden" name="mode" value="add">
+        <div class="col-md-3"><label class="form-label">Số lượng nhập thêm <span class="text-danger">*</span></label>
+          <input name="quantity" type="number" step="any" min="0" class="form-control" required>
+          <div class="form-text">Cộng vào tồn hiện có của kho.</div></div>
+        <% } %>
         <div class="col-md-3"><label class="form-label">Đơn vị</label><input class="form-control" data-f="unit" value="<%= pre.unit || (preMaterial && preMaterial.unit) || '' %>" disabled></div>
         <div class="col-md-6"><label class="form-label">Tình trạng</label><input name="condition" class="form-control" value="<%= pre.condition || '' %>" placeholder="Mới / Đã qua sử dụng / Hỏng..."></div>
         <div class="col-md-6"><label class="form-label">Vị trí để</label><input name="location" class="form-control" value="<%= pre.location || '' %>"></div>

@@ -26,17 +26,25 @@ function syncDirectory(db, dir, adminSsoIds = []) {
 
     for (const e of dir.employees) upsertUser(db, e, stamp, adminSsoIds);
 
-    // Bộ phận / chức vụ / người không còn trong SSO thì ngưng hoạt động
-    const keep = (rows) => rows.map((r) => String(r.id));
-    deactivateMissing(db, 'departments', keep(dir.departments));
-    deactivateMissing(db, 'positions', keep(dir.positions));
-    deactivateMissing(db, 'users', keep(dir.employees));
-    return { departments: dir.departments.length, positions: dir.positions.length, employees: dir.employees.length };
+    // Bộ phận / chức vụ / người không còn trong SSO thì ngưng hoạt động.
+    // An toàn: nếu danh sách trả về rỗng hoặc ít hơn một nửa số đang hoạt động (SSO lỗi, phân trang...)
+    // thì không ngưng ai cả, chỉ cảnh báo.
+    const warnings = [];
+    for (const [table, rows, label] of [['departments', dir.departments, 'bộ phận'], ['positions', dir.positions, 'chức vụ'], ['users', dir.employees, 'CBCNV']]) {
+      const active = db.one(`SELECT COUNT(*) n FROM ${table} WHERE active = 1`).n;
+      if (!rows.length || rows.length < active * 0.5) {
+        warnings.push(`SSO chỉ trả về ${rows.length}/${active} ${label} đang hoạt động: bỏ qua bước ngưng hoạt động`);
+        continue;
+      }
+      deactivateMissing(db, table, rows.map((r) => String(r.id)));
+    }
+    return { departments: dir.departments.length, positions: dir.positions.length, employees: dir.employees.length, warnings };
   });
 }
 
 function deactivateMissing(db, table, ids) {
-  const placeholders = ids.map(() => '?').join(',') || "''";
+  if (!ids.length) return;
+  const placeholders = ids.map(() => '?').join(',');
   db.run(`UPDATE ${table} SET active = 0 WHERE sso_id NOT IN (${placeholders})`, ...ids);
 }
 

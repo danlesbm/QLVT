@@ -118,10 +118,10 @@
           </div>
           <table class="table table-sm"><thead><tr><th>Vật tư</th><th class="text-end">SL</th><th>Đơn giá (đ)</th><th>VAT %</th><th>Hãng / xuất xứ chào</th><th>Ghi chú</th></tr></thead><tbody>
             <% items.forEach(it => { %><tr><td><%= it.line_no %>. <%= it.name %></td><td class="text-end"><%= h.num(it.quantity) %></td>
-              <td><input name="lines[<%= it.id %>][unit_price]" type="number" step="any" min="0" class="form-control form-control-sm"></td>
-              <td><input name="lines[<%= it.id %>][vat_percent]" type="number" step="any" class="form-control form-control-sm" style="width:70px" value="10"></td>
-              <td><input name="lines[<%= it.id %>][brand_origin]" class="form-control form-control-sm"></td>
-              <td><input name="lines[<%= it.id %>][note]" class="form-control form-control-sm"></td></tr><% }) %>
+              <td><input name="lines[i<%= it.id %>][unit_price]" type="number" step="any" min="0" class="form-control form-control-sm"></td>
+              <td><input name="lines[i<%= it.id %>][vat_percent]" type="number" step="any" class="form-control form-control-sm" style="width:70px" value="10"></td>
+              <td><input name="lines[i<%= it.id %>][brand_origin]" class="form-control form-control-sm"></td>
+              <td><input name="lines[i<%= it.id %>][note]" class="form-control form-control-sm"></td></tr><% }) %>
           </tbody></table>
           <input name="note" class="form-control form-control-sm mb-2" placeholder="Ghi chú chung">
           <button class="btn btn-sm btn-primary"><i class="bi bi-upload"></i> Gửi báo giá</button>
@@ -140,9 +140,10 @@
           <table class="table table-sm"><thead><tr><th>Vật tư</th><th>Chọn nhà cung cấp</th></tr></thead><tbody>
           <% items.forEach(it => { const opts = quotes.filter(q => q.byItem[it.id]).map(q => ({ q, l: q.byItem[it.id], t: lineTotal(it, q.byItem[it.id]) })).sort((a, b) => a.t - b.t); %>
             <tr><td><%= it.line_no %>. <%= it.name %></td><td>
-              <select name="selected[<%= it.id %>]" class="form-select form-select-sm" required>
-                <% opts.forEach((o, oi) => { %><option value="<%= o.l.id %>" <%= (it.selected_line_id ? it.selected_line_id === o.l.id : oi === 0) ? 'selected' : '' %>><%= o.q.supplier %> - <%= h.money(o.t) %> đ<%= oi === 0 ? ' (thấp nhất)' : '' %></option><% }) %>
-              </select></td></tr>
+              <% if (!opts.length) { %><span class="small text-muted">Chưa có báo giá cho vật tư này<%= it.competitive ? '' : ' (không cần báo giá cạnh tranh)' %></span><% } else { %>
+              <select name="selected[i<%= it.id %>]" class="form-select form-select-sm" required>
+                <% opts.forEach((o, oi) => { %><option value="<%= o.l.id %>" <%= (it.selected_line_id ? it.selected_line_id === o.l.id : oi === 0) ? 'selected' : '' %>><%= o.q.supplier %> - <%= h.money(o.t) %> đ<%= oi === 0 && opts.length > 1 ? ' (thấp nhất)' : '' %></option><% }) %>
+              </select><% } %></td></tr>
           <% }) %>
           </tbody></table>
           <div class="row g-2">
@@ -173,8 +174,8 @@
           <input type="hidden" name="_csrf" value="<%= csrf %>">
           <table class="table table-sm"><thead><tr><th>Vật tư</th><th class="text-end">SL đề xuất</th><th>SL thực nhận</th><th>Tình trạng</th></tr></thead><tbody>
           <% items.forEach(it => { %><tr><td><%= it.line_no %>. <%= it.name %><% if (!it.material_id) { %> <span class="badge text-bg-warning">chưa có mã</span><% } %></td><td class="text-end"><%= h.num(it.quantity) %></td>
-            <td><input name="received[<%= it.id %>][qty]" type="number" step="any" min="0" value="<%= it.quantity %>" class="form-control form-control-sm" style="width:100px"></td>
-            <td><input name="received[<%= it.id %>][condition]" class="form-control form-control-sm" placeholder="Đạt / Mới 100%..."></td></tr><% }) %>
+            <td><input name="received[i<%= it.id %>][qty]" type="number" step="any" min="0" value="<%= it.quantity %>" class="form-control form-control-sm" style="width:100px"></td>
+            <td><input name="received[i<%= it.id %>][condition]" class="form-control form-control-sm" placeholder="Đạt / Mới 100%..."></td></tr><% }) %>
           </tbody></table>
           <div class="form-check mb-2"><input class="form-check-input" type="checkbox" name="stock_in" value="1" id="si" checked><label class="form-check-label" for="si">Nhập số lượng thực nhận vào kho <%= row.factory_name %> (chỉ vật tư đã có mã)</label></div>
           <input name="comment" class="form-control form-control-sm mb-2" placeholder="Ghi chú kiểm tra">
@@ -236,6 +237,12 @@
             <div class="input-group input-group-sm"><select name="compiler_id" class="form-select">
               <% quoters.forEach(q => { %><option value="<%= q.user_id %>" <%= q.user_id === row.compiler_id ? 'selected' : '' %>><%= q.full_name %></option><% }) %></select>
               <button class="btn btn-primary">Giao</button></div></form>
+        <% } %>
+        <% if (acts.has('quote_close') && quoters.some(q => q.status === 'DANG_LAM')) { %>
+          <form method="post" action="<%= url('quote_close') %>" data-confirm="Kết thúc phần báo giá của nhân viên này?"><input type="hidden" name="_csrf" value="<%= csrf %>">
+            <label class="form-label small mb-1">Kết thúc báo giá thay nhân viên (vắng mặt, nghỉ việc...)</label>
+            <select name="user_id" class="form-select form-select-sm mb-1"><% quoters.filter(q => q.status === 'DANG_LAM').forEach(q => { %><option value="<%= q.user_id %>"><%= q.full_name %></option><% }) %></select>
+            <div class="input-group input-group-sm"><input name="comment" class="form-control" placeholder="Lý do *" required><button class="btn btn-outline-warning">Kết thúc</button></div></form>
         <% } %>
         <% if (acts.has('quote_reopen')) { %>
           <form method="post" action="<%= url('quote_reopen') %>"><input type="hidden" name="_csrf" value="<%= csrf %>">

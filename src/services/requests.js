@@ -57,6 +57,7 @@ const ACTION_LABEL = {
   quote_delete: 'Xóa báo giá',
   quote_done: 'Hoàn thành báo giá',
   quote_reopen: 'Yêu cầu báo giá lại',
+  quote_close: 'TP Kế hoạch kết thúc báo giá thay nhân viên',
   assign_compiler: 'Giao tổng hợp so sánh giá',
   comparison_submit: 'Trình Giám đốc duyệt giá',
   price_external: 'Duyệt giá ngoài phần mềm',
@@ -65,6 +66,13 @@ const ACTION_LABEL = {
   goods_received: 'Nhà máy đã nhận hàng',
   complete: 'Kiểm tra xong, hoàn thành',
 };
+
+/**
+ * Trường form theo vật tư được đặt tên dạng `received[i<id>]` (có tiền tố "i") để bộ phân tích
+ * form (qs) không biến khóa số thành mảng bị dồn chỉ số. Hàm đọc cả hai dạng.
+ */
+const byItem = (obj, id) => (obj ? obj[`i${id}`] ?? obj[id] : undefined);
+const itemKey = (key) => Number(String(key).replace(/^i/, ''));
 
 // ---------- Đọc dữ liệu ----------
 
@@ -152,6 +160,7 @@ function list(db, access, user, { status, factoryId, q, mine, page = 1, pageSize
     where.push(`(r.factory_id IN (${ids.map(() => '?').join(',')}) OR r.created_by = ? OR r.director_id = ?)`);
     params.push(...ids, user.id, user.id);
   }
+  if (typeof status !== 'string') status = '';
   if (status === 'DANG_XU_LY') where.push(`r.status NOT IN ('NHAP','HOAN_THANH','DA_HUY')`);
   else if (status) {
     where.push('r.status = ?');
@@ -218,7 +227,7 @@ function availableActions(db, access, user, r) {
     case 'DANG_BAO_GIA': {
       const unsealed = quotesUnsealed(db, r.id);
       if (can(access, 'purchase.head')) {
-        if (!unsealed) a.add('assign_quoters');
+        if (!unsealed) a.add('assign_quoters').add('quote_close');
         else a.add('assign_compiler').add('quote_reopen');
       }
       if (isQuoter && isQuoter.status === 'DANG_LAM') a.add('quote_add').add('quote_delete').add('quote_done');
@@ -267,7 +276,7 @@ function setStatus(db, r, to, user, action, comment, extra = {}) {
 }
 
 /** Chuẩn hóa danh sách vật tư từ form. */
-function parseItems(db, raw) {
+function parseItems(db, factoryId, raw) {
   const out = [];
   for (const it of toArray(raw)) {
     const name = str(it.name);
@@ -276,7 +285,12 @@ function parseItems(db, raw) {
     if (!name) throw new AppError('Có dòng vật tư chưa nhập tên');
     if (quantity == null || quantity <= 0) throw new AppError(`Số lượng của "${name}" không hợp lệ`);
     const materialId = it.material_id ? Number(it.material_id) : null;
-    if (materialId && !db.one('SELECT 1 FROM materials WHERE id = ?', materialId)) throw new AppError('Mã vật tư không tồn tại');
+    if (materialId) {
+      const m = db.one('SELECT code, factory_id, active FROM materials WHERE id = ?', materialId);
+      if (!m) throw new AppError('Mã vật tư không tồn tại');
+      if (m.factory_id && m.factory_id !== factoryId) throw new AppError(`Mã ${m.code} là mã riêng của nhà máy khác`);
+      if (!m.active) throw new AppError(`Mã ${m.code} đã ngưng sử dụng`);
+    }
     out.push({
       material_id: materialId,
       name,
@@ -308,7 +322,7 @@ function create(db, user, access, data) {
   if (!can(access, 'request.create', factoryId)) throw new AppError('Bạn không có quyền lập phiếu cho nhà máy này', 403);
   const title = str(data.title);
   if (!title) throw new AppError('Nhập tiêu đề phiếu');
-  const list = parseItems(db, data.items);
+  const list = parseItems(db, factoryId, data.items);
   return db.tx(() => {
     const r = db.run('INSERT INTO requests (factory_id, title, basis, created_by) VALUES (?, ?, ?, ?)', factoryId, title, str(data.basis), user.id);
     const id = Number(r.lastInsertRowid);
@@ -325,7 +339,7 @@ function update(db, user, access, id, data) {
   const acts = availableActions(db, access, user, r);
   const byPkt = ['CHO_PKT', 'CHO_TPKT'].includes(r.status);
   if (!(acts.has('edit') || (byPkt && acts.has('pkt_edit')))) throw new AppError('Phiếu không ở trạng thái cho phép sửa', 403);
-  const list = parseItems(db, data.items);
+  const list = parseItems(db, r.factory_id, data.items);
   if (!list.length) throw new AppError('Phiếu phải có ít nhất 1 vật tư');
   db.tx(() => {
     if (!byPkt) {
@@ -338,10 +352,16 @@ function update(db, user, access, id, data) {
   });
 }
 
+/** Số phiếu tăng theo ký hiệu + năm: các nhà máy dùng chung ký hiệu (vd PNC-TC&NC3-SBM) dùng chung dãy số. */
 function nextNumber(db, r) {
   const year = new Date().getFullYear();
-  const seq = (db.one('SELECT MAX(seq) m FROM requests WHERE factory_id = ? AND year = ?', r.factory_id, year).m || 0) + 1;
-  return { seq, year, number: `${seq}/${r.request_prefix || 'PNC-' + r.factory_code}` };
+  const prefix = r.request_prefix || `PNC-${r.factory_code}`;
+  const seq = (db.one(
+    `SELECT MAX(q.seq) m FROM requests q JOIN factories f ON f.id = q.factory_id
+      WHERE COALESCE(f.request_prefix, 'PNC-' || f.code) = ? AND q.year = ?`,
+    prefix, year,
+  ).m || 0) + 1;
+  return { seq, year, number: `${seq}/${prefix}` };
 }
 
 /**
@@ -421,7 +441,8 @@ function act(db, user, access, id, action, data = {}, file = null) {
         const q = db.one('SELECT * FROM quotes WHERE id = ? AND request_id = ? AND quoter_id = ?', Number(data.quote_id), id, user.id);
         if (!q) throw new AppError('Không tìm thấy báo giá của bạn');
         db.run('DELETE FROM quotes WHERE id = ?', q.id);
-        log(db, r, action, r.status, user, q.supplier);
+        // Không ghi tên nhà cung cấp: báo giá vẫn đang niêm phong
+        log(db, r, action, r.status, user, null);
         break;
       }
       case 'quote_done': {
@@ -432,7 +453,17 @@ function act(db, user, access, id, action, data = {}, file = null) {
           comment, id, user.id,
         );
         log(db, r, action, r.status, user, comment);
-        if (quotesUnsealed(db, id)) log(db, r, 'quotes_unsealed', r.status, user, 'Đã đủ báo giá - Trưởng phòng và Giám đốc có thể xem');
+        logUnseal(db, r, user);
+        break;
+      }
+      case 'quote_close': {
+        if (!comment) throw new AppError('Nhập lý do kết thúc báo giá thay nhân viên');
+        const qid = Number(data.user_id);
+        const row = db.one(`SELECT q.*, u.full_name FROM request_quoters q JOIN users u ON u.id = q.user_id WHERE q.request_id = ? AND q.user_id = ? AND q.status = 'DANG_LAM'`, id, qid);
+        if (!row) throw new AppError('Nhân viên này không còn đang báo giá');
+        db.run(`UPDATE request_quoters SET status = 'DA_XONG', done_note = ?, done_at = datetime('now','localtime') WHERE id = ?`, `TP kết thúc thay: ${comment}`, row.id);
+        log(db, r, action, r.status, user, `${row.full_name}: ${comment}`);
+        logUnseal(db, r, user);
         break;
       }
       case 'quote_reopen': {
@@ -493,8 +524,12 @@ function assignQuoters(db, r, user, data) {
   const ids = [...new Set(toArray(data.quoter_ids).map(Number).filter(Boolean))];
   if (!ids.length) throw new AppError('Chọn ít nhất 1 nhân viên báo giá');
   if (ids.length > max) throw new AppError(`Chỉ giao tối đa ${max} nhân viên báo giá`);
-  for (const uid of ids) if (!hasPerm(db, uid, 'purchase.staff')) throw new AppError('Có người được chọn không thuộc Phòng Kế hoạch (thiếu quyền nhân viên mua sắm)');
   const current = quoters(db, r.id);
+  const currentIds = new Set(current.map((q) => q.user_id));
+  const added = ids.filter((uid) => !currentIds.has(uid));
+  for (const uid of added) if (!hasPerm(db, uid, 'purchase.staff')) throw new AppError('Có người được chọn không thuộc Phòng Kế hoạch (thiếu quyền nhân viên mua sắm)');
+  // Báo giá đã từng mở niêm phong thì không được giao thêm người (người mới có thể đã biết giá)
+  if (added.length && wasUnsealed(db, r.id)) throw new AppError('Báo giá đã từng được mở niêm phong, không thể giao thêm người báo giá');
   for (const q of current) {
     if (ids.includes(q.user_id)) continue;
     const has = db.one('SELECT COUNT(*) n FROM quotes WHERE request_id = ? AND quoter_id = ?', r.id, q.user_id).n;
@@ -508,6 +543,20 @@ function assignQuoters(db, r, user, data) {
   for (const itemId of nonComp) db.run('UPDATE request_items SET competitive = 0 WHERE id = ? AND request_id = ?', itemId, r.id);
   const names = quoters(db, r.id).map((q) => q.full_name).join(', ');
   log(db, r, 'assign_quoters', r.status, user, `Giao báo giá: ${names}${nonComp.size ? `; ${nonComp.size} vật tư không cần báo giá cạnh tranh` : ''}`);
+  // Bỏ giao người chưa báo giá cũng có thể làm đủ báo giá: ghi nhận mở niêm phong
+  logUnseal(db, r, user);
+}
+
+function wasUnsealed(db, requestId) {
+  return !!db.one(`SELECT 1 FROM request_history WHERE request_id = ? AND action = 'quotes_unsealed'`, requestId);
+}
+
+/** Ghi lịch sử "mở niêm phong" đúng 1 lần mỗi khi báo giá chuyển từ niêm phong sang mở. */
+function logUnseal(db, r, user) {
+  if (!quotesUnsealed(db, r.id)) return;
+  const last = db.one(`SELECT action FROM request_history WHERE request_id = ? AND action IN ('quotes_unsealed','quote_reopen') ORDER BY id DESC LIMIT 1`, r.id);
+  if (last && last.action === 'quotes_unsealed') return;
+  log(db, r, 'quotes_unsealed', r.status, user, 'Đã đủ báo giá - Trưởng phòng và Giám đốc có thể xem');
 }
 
 function addQuote(db, r, user, data, file) {
@@ -516,7 +565,8 @@ function addQuote(db, r, user, data, file) {
   const lines = [];
   const itemIds = new Set(items(db, r.id).map((i) => i.id));
   for (const [key, l] of Object.entries(data.lines || {})) {
-    const itemId = Number(l.item_id || key);
+    if (!l || typeof l !== 'object') continue;
+    const itemId = Number(l.item_id) || itemKey(key);
     if (!itemIds.has(itemId)) continue;
     const price = num(l.unit_price);
     if (price == null) continue;
@@ -543,7 +593,13 @@ function submitComparison(db, r, user, data) {
   const its = items(db, r.id);
   const sel = data.selected || {};
   for (const it of its) {
-    const lineId = Number(sel[it.id]);
+    const offered = db.one('SELECT COUNT(*) n FROM quote_lines l JOIN quotes q ON q.id = l.quote_id WHERE l.request_item_id = ? AND q.request_id = ?', it.id, r.id).n;
+    const lineId = Number(byItem(sel, it.id));
+    if (!lineId && !offered) {
+      // Vật tư không có báo giá nào (vd không cần báo giá cạnh tranh): để Giám đốc duyệt theo ghi chú
+      db.run('UPDATE request_items SET selected_line_id = NULL WHERE id = ?', it.id);
+      continue;
+    }
     if (!lineId) throw new AppError(`Chưa chọn báo giá cho "${it.name}"`);
     const ok = db.one(
       'SELECT 1 FROM quote_lines l JOIN quotes q ON q.id = l.quote_id WHERE l.id = ? AND l.request_item_id = ? AND q.request_id = ?',
@@ -565,18 +621,19 @@ function complete(db, r, user, data) {
   const stockIn = data.stock_in === '1' || data.stock_in === 'on' || data.stock_in === true;
   const skipped = [];
   for (const it of its) {
-    const x = rec[it.id] || {};
+    const x = byItem(rec, it.id) || {};
     const qty = num(x.qty);
     const q = qty == null ? it.quantity : qty;
     if (q < 0) throw new AppError('Số lượng nhận không hợp lệ');
     db.run('UPDATE request_items SET received_qty = ?, received_condition = ? WHERE id = ?', q, str(x.condition), it.id);
     if (stockIn && q > 0) {
-      if (!it.material_id) skipped.push(it.name);
+      const m = it.material_id ? db.one('SELECT factory_id FROM materials WHERE id = ?', it.material_id) : null;
+      if (!m || (m.factory_id && m.factory_id !== r.factory_id)) skipped.push(it.name);
       else stock.move(db, { factoryId: r.factory_id, materialId: it.material_id, delta: q, kind: 'NHAP', refType: 'request', refId: r.id, note: `Nhập theo phiếu ${r.number}`, userId: user.id });
     }
   }
   let comment = str(data.comment) || '';
-  if (stockIn) comment += `${comment ? '. ' : ''}Đã nhập kho${skipped.length ? `; chưa có mã nên chưa nhập kho: ${skipped.join(', ')}` : ''}`;
+  if (stockIn) comment += `${comment ? '. ' : ''}Đã nhập kho${skipped.length ? `; chưa có mã (hoặc mã riêng nhà máy khác) nên chưa nhập kho: ${skipped.join(', ')}` : ''}`;
   setStatus(db, r, 'HOAN_THANH', user, 'complete', comment || null, { completed_at: new Date().toISOString() });
 }
 

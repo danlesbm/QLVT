@@ -20,4 +20,7 @@ const num = (v) => {
 };
 const toArray = (v) => (Array.isArray(v) ? v : v && typeof v === 'object' ? Object.values(v) : v == null ? [] : [v]);
 
-module.exports = { AppError, n, str, num, toArray };
+/** Chỉ chấp nhận đường dẫn nội bộ dạng /abc (chặn //host, /\host, ký tự điều khiển) để tránh chuyển hướng ra ngoài. */
+const safeNext = (v) => (typeof v === 'string' && /^\/(?![/\\])[^\\\x00-\x1f]*$/.test(v) ? v : '/');
+
+module.exports = { AppError, n, str, num, toArray, safeNext };

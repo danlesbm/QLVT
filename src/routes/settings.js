@@ -15,6 +15,8 @@ const SETTING_KEYS = [
   ['company_website', 'Website'],
   ['company_email', 'Email'],
   ['request_recipient', 'Kính gửi (phiếu nhu cầu)'],
+  ['request_cc_hard', 'Nơi nhận - bản cứng (phiếu nhu cầu)'],
+  ['request_cc_scan', 'Nơi nhận - bản scan ({nha_may} = tên nhà máy)'],
 ];
 
 module.exports = (db) => {
@@ -50,7 +52,7 @@ module.exports = (db) => {
   r.post('/dong-bo-sso', need('admin.settings'), async (req, res) => {
     try {
       const x = await runSync(db);
-      res.flash('success', `Đã đồng bộ từ SSO: ${x.employees} CBCNV, ${x.departments} bộ phận, ${x.positions} chức vụ`);
+      res.flash(x.warnings.length ? 'warning' : 'success', `Đã đồng bộ từ SSO: ${x.employees} CBCNV, ${x.departments} bộ phận, ${x.positions} chức vụ${x.warnings.length ? '. ' + x.warnings.join('; ') : ''}`);
     } catch (err) {
       res.flash('danger', `Đồng bộ SSO thất bại: ${err.message}`);
     }
@@ -74,6 +76,8 @@ module.exports = (db) => {
     const code = str(b.code);
     const name = str(b.name);
     if (!code || !name) throw new AppError('Nhập mã và tên nhà máy');
+    if (db.one('SELECT 1 FROM factories WHERE code = ? AND id <> ?', code, id || 0)) throw new AppError(`Mã nhà máy ${code} đã tồn tại`);
+    if (str(b.warehouse_code) && db.one('SELECT 1 FROM factories WHERE warehouse_code = ? AND id <> ?', str(b.warehouse_code), id || 0)) throw new AppError(`Mã kho ${b.warehouse_code} đã dùng cho nhà máy khác`);
     const vals = [code, name, str(b.warehouse_code), str(b.warehouse_name), str(b.address), str(b.request_prefix), b.director_id ? Number(b.director_id) : null, Number(b.sort) || 0, b.active ? 1 : 0];
     db.tx(() => {
       let fid = id;
@@ -102,6 +106,7 @@ module.exports = (db) => {
   r.post('/nhom-quyen', need('admin.permissions'), (req, res) => {
     const name = str(req.body.name);
     if (!name) throw new AppError('Nhập tên nhóm quyền');
+    if (db.one('SELECT 1 FROM roles WHERE name = ? AND id <> ?', name, Number(req.body.id) || 0)) throw new AppError(`Nhóm quyền "${name}" đã tồn tại`);
     const valid = new Set(PERMISSIONS.map((p) => p.code));
     const perms = [].concat(req.body.perms || []).filter((p) => valid.has(p));
     if (req.body.id) db.run('UPDATE roles SET name = ?, description = ?, permissions = ? WHERE id = ?', name, str(req.body.description), JSON.stringify(perms), Number(req.body.id));
@@ -124,9 +129,9 @@ module.exports = (db) => {
               (SELECT GROUP_CONCAT(r.name || IFNULL(' @' || f.code, ''), ', ') FROM user_roles ur JOIN roles r ON r.id = ur.role_id
                  LEFT JOIN factories f ON f.id = ur.factory_id WHERE ur.user_id = u.id) AS roles
          FROM users u LEFT JOIN departments d ON d.id = u.department_id LEFT JOIN positions p ON p.id = u.position_id
-        WHERE (u.full_name LIKE ? OR u.username LIKE ? OR d.name LIKE ?) ${req.query.dep ? 'AND u.department_id = ' + Number(req.query.dep) : ''}
+        WHERE (u.full_name LIKE ? OR u.username LIKE ? OR d.name LIKE ?) AND (? = 0 OR u.department_id = ?)
         ORDER BY u.active DESC, d.name, u.full_name`,
-      q, q, q,
+      q, q, q, Number(req.query.dep) || 0, Number(req.query.dep) || 0,
     );
     res.render('settings/users', { title: 'Người dùng & phân quyền', users, query: req.query, departments: db.all('SELECT * FROM departments WHERE active = 1 ORDER BY name') });
   });

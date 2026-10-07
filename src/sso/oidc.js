@@ -1,5 +1,6 @@
 'use strict';
 const crypto = require('node:crypto');
+const { safeNext } = require('../services/util');
 
 /**
  * Adapter SSO chuẩn OpenID Connect (Authorization Code + PKCE).
@@ -15,8 +16,10 @@ function create(cfg) {
   const pick = (o, ...keys) => keys.map((k) => o[k]).find((v) => v !== undefined && v !== null && v !== '');
 
   function normEmployee(o) {
+    const id = pick(o, cfg.claimId, 'id', 'sub', 'employee_id', 'code');
+    if (id === undefined) return null;
     return {
-      id: String(pick(o, cfg.claimId, 'id', 'sub', 'employee_id', 'code')),
+      id: String(id),
       username: pick(o, 'username', 'preferred_username', 'user_name'),
       full_name: pick(o, 'full_name', 'name', 'fullName', 'display_name'),
       email: pick(o, 'email'),
@@ -30,7 +33,9 @@ function create(cfg) {
     const res = await fetch(url, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } });
     if (!res.ok) throw new Error(`SSO trả lỗi ${res.status} khi gọi ${url}`);
     const body = await res.json();
-    return Array.isArray(body) ? body : body.data || body.items || [];
+    const list = Array.isArray(body) ? body : Array.isArray(body?.data) ? body.data : Array.isArray(body?.items) ? body.items : null;
+    if (!list) throw new Error(`Không nhận ra định dạng danh bạ SSO tại ${url} (cần mảng JSON hoặc { data: [...] })`);
+    return list;
   }
 
   return {
@@ -41,10 +46,12 @@ function create(cfg) {
       const [deps, poss, emps] = await Promise.all(
         ['departments', 'positions', 'employees'].map((p) => getJson(`${base}/${p}`, cfg.directoryToken)),
       );
+      const ref = (o) => ({ id: pick(o, 'id', 'code'), code: pick(o, 'code'), name: pick(o, 'name', 'title') });
+      const valid = (x) => x && x.id !== undefined && x.name !== undefined;
       return {
-        departments: deps.map((d) => ({ id: String(pick(d, 'id', 'code')), code: pick(d, 'code'), name: pick(d, 'name', 'title') })),
-        positions: poss.map((p) => ({ id: String(pick(p, 'id', 'code')), code: pick(p, 'code'), name: pick(p, 'name', 'title') })),
-        employees: emps.map(normEmployee),
+        departments: deps.map(ref).filter(valid).map((d) => ({ ...d, id: String(d.id) })),
+        positions: poss.map(ref).filter(valid).map((p) => ({ ...p, id: String(p.id) })),
+        employees: emps.map(normEmployee).filter(Boolean),
       };
     },
     loginStart(req, res) {
@@ -52,7 +59,7 @@ function create(cfg) {
       const verifier = crypto.randomBytes(32).toString('base64url');
       const challenge = crypto.createHash('sha256').update(verifier).digest('base64url');
       const opts = { httpOnly: true, sameSite: 'lax', secure: req.secure, maxAge: 10 * 60 * 1000 };
-      res.cookie('qlvt_oidc', JSON.stringify({ state, verifier, next: req.query.next || '/' }), opts);
+      res.cookie('qlvt_oidc', JSON.stringify({ state, verifier, next: safeNext(req.query.next) }), opts);
       const url = new URL(cfg.authorizeUrl);
       url.search = new URLSearchParams({
         response_type: 'code',
@@ -66,7 +73,12 @@ function create(cfg) {
       res.redirect(url.toString());
     },
     async callback(req, res) {
-      const saved = JSON.parse(req.cookies.qlvt_oidc || '{}');
+      let saved = {};
+      try {
+        saved = JSON.parse(req.cookies.qlvt_oidc || '{}');
+      } catch {
+        /* cookie hỏng */
+      }
       res.clearCookie('qlvt_oidc');
       if (!req.query.code || !saved.state || saved.state !== req.query.state) throw new Error('Phiên đăng nhập SSO không hợp lệ, vui lòng thử lại');
       const tokenRes = await fetch(cfg.tokenUrl, {
@@ -86,6 +98,7 @@ function create(cfg) {
       const infoRes = await fetch(cfg.userinfoUrl, { headers: { Authorization: `Bearer ${token.access_token}` } });
       if (!infoRes.ok) throw new Error(`Không đọc được thông tin người dùng từ SSO (${infoRes.status})`);
       const profile = normEmployee(await infoRes.json());
+      if (!profile) throw new Error('SSO không trả về mã định danh người dùng (kiểm tra SSO_CLAIM_ID)');
       profile.next = saved.next;
       return profile;
     },

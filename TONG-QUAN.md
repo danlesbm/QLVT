@@ -29,7 +29,7 @@ Phần mềm quản lý vật tư cho Công ty CP Đầu tư Phát triển Bắc
 | Thành phần | Lựa chọn | Lý do |
 |---|---|---|
 | Máy chủ | Node.js ≥ 22.13, Express 5 | Gọn, dễ triển khai trên Windows/Linux |
-| CSDL | SQLite (`node:sqlite` có sẵn trong Node, không cần cài thêm) | 5 nhà máy, vài chục người dùng: đủ nhanh, sao lưu chỉ là chép 1 file |
+| CSDL | SQLite (`node:sqlite` có sẵn trong Node, không cần cài thêm) | 5 nhà máy, vài chục người dùng: đủ nhanh, sao lưu bằng 1 lệnh (`npm run backup`) |
 | Giao diện | EJS render phía máy chủ + Bootstrap 5 | Không cần build, chạy tốt trên máy văn phòng |
 | Excel | ExcelJS | Xuất phiếu theo mẫu, đọc file tồn kho cũ |
 | SSO | Adapter OIDC + chế độ giả lập | Xem mục 4 |
@@ -45,7 +45,7 @@ Repo SSO và Payroll trên GitHub hiện gần như rỗng nên chưa có mẫu 
 - Từ chối bắt buộc lý do: ở các bước duyệt nhu cầu → trả về người lập sửa và trình lại (giữ số phiếu); GĐ từ chối giá → về bước tổng hợp; nhà máy từ chối hàng → về Đang mua sắm.
 - PKT (người được giao hoặc TP) được điều chỉnh danh sách vật tư, có ghi lịch sử.
 - TP Kỹ thuật chọn GĐ/PGĐ phụ trách (mặc định theo nhà máy); chỉ người được phân công mới duyệt được.
-- **Báo giá niêm phong**: tối đa 3 người (chỉnh được), mỗi người chỉ thấy báo giá của mình; TP Kế hoạch và Giám đốc chỉ thấy khi tất cả đã bấm "Hoàn thành báo giá" (người không lấy được báo giá phải ghi lý do). Lịch sử không ghi tên nhà cung cấp trước khi mở niêm phong. TP có thể yêu cầu một người báo giá lại.
+- **Báo giá niêm phong**: tối đa 3 người (chỉnh được), mỗi người chỉ thấy báo giá của mình; TP Kế hoạch và Giám đốc chỉ thấy khi tất cả đã bấm "Hoàn thành báo giá" (người không lấy được báo giá phải ghi lý do). Lịch sử không ghi tên nhà cung cấp trước khi mở niêm phong. TP có thể yêu cầu một người báo giá lại, hoặc **kết thúc báo giá thay** người đi vắng (kèm lý do) để phiếu không bị treo. Sau khi đã mở niêm phong thì không giao thêm người báo giá mới được nữa (người mới có thể đã biết giá).
 - Bảng so sánh giá tự tính thành tiền gồm VAT, tô xanh giá thấp nhất; người tổng hợp chọn nhà cung cấp từng vật tư và trình GĐ duyệt giá; hoặc TP ghi nhận "đã duyệt ngoài phần mềm" kèm tờ trình.
 - Đính kèm file báo giá / tờ trình.
 - Nhà máy nhận hàng, nhập số lượng thực nhận và tình trạng; tùy chọn **tự nhập kho** các vật tư có mã.
@@ -58,7 +58,8 @@ Repo SSO và Payroll trên GitHub hiện gần như rỗng nên chưa có mẫu 
 
 ### Tồn kho (`/kho`) và mã vật tư (`/ma-vat-tu`)
 - Danh sách tồn theo kho với đủ cột yêu cầu, tìm kiếm, phân trang, xuất Excel.
-- Nhập thêm / điều chỉnh vật tư theo quyền từng kho; sổ biến động nhập–xuất–điều chỉnh từng vật tư.
+- Nhập thêm vật tư (cộng dồn số lượng nhập) hoặc sửa tồn thực tế của một dòng (ghi nhận là điều chỉnh, chặn ghi đè nếu tồn vừa thay đổi do phiếu xuất khác); sổ biến động nhập–xuất–điều chỉnh từng vật tư.
+- Tổng tồn hiển thị trong danh mục mã vật tư chỉ tính các kho người dùng được quyền xem.
 - **Import file tồn kho của phần mềm cũ** (giao diện hoặc lệnh), chuẩn hóa đơn vị CAI/BO/... thành Cái/Bộ/...
 - Danh mục mã: mã chung toàn công ty hoặc riêng từng nhà máy; nhóm mã theo tiền tố; nút **gợi ý mã tiếp theo** (vd `1-01-00-00-02-02` → `...-007`).
 
@@ -66,12 +67,13 @@ Repo SSO và Payroll trên GitHub hiện gần như rỗng nên chưa có mẫu 
 - 20 quyền chi tiết chia nhóm; quyền theo nhà máy hoặc toàn công ty.
 - 10 nhóm quyền mặc định (Người tổng hợp đề xuất, GĐ nhà máy, Thủ kho, Người đánh mã, TP/CB Kỹ thuật, Ban Giám đốc, TP/NV Kế hoạch, Người xem); tạo/sửa nhóm tùy ý.
 - Gán nhóm quyền cho người dùng theo từng nhà máy; quyền quản trị toàn hệ thống.
-- Cài đặt thông tin công ty in trên phiếu, nhà máy (mã kho, ký hiệu số phiếu, GĐ phụ trách, bộ phận SSO thuộc nhà máy), đồng bộ SSO.
+- Cài đặt thông tin công ty in trên phiếu, dòng "Kính gửi" và "Nơi nhận" (bản cứng / bản scan) của phiếu nhu cầu, nhà máy (mã kho, ký hiệu số phiếu, GĐ phụ trách, bộ phận SSO thuộc nhà máy), đồng bộ SSO.
 - Trang Tổng quan: "Việc cần tôi xử lý", thống kê theo trạng thái và theo nhà máy.
 
 ### Kỹ thuật
-- Chống CSRF cho mọi form, phiên đăng nhập lưu CSDL, cookie httpOnly.
-- 11 bài kiểm thử tự động (`npm test`): toàn bộ quy trình, niêm phong báo giá, phân quyền theo nhà máy, xuất kho trừ tồn, xuất Excel, chặn CSRF. CI GitHub Actions chạy test.
+- Chống CSRF cho mọi form, phiên đăng nhập lưu CSDL, cookie httpOnly, chỉ chuyển hướng trong nội bộ ứng dụng.
+- 28 bài kiểm thử tự động (`npm test`): toàn bộ quy trình, niêm phong báo giá, phân quyền theo nhà máy, xuất kho trừ tồn, xuất Excel, chặn CSRF, và các bài hồi quy cho đợt rà soát (khóa form, bộ lọc, cộng dồn tồn, an toàn đồng bộ SSO). CI GitHub Actions chạy test.
+- Sao lưu: `npm run backup` tạo bản sao nhất quán của CSDL (`VACUUM INTO`, an toàn khi đang bật WAL) vào `BACKUP_DIR`; cần sao lưu kèm thư mục `UPLOAD_DIR` (tệp báo giá, tờ trình).
 
 ## 4. Kết nối SSO
 
@@ -96,7 +98,36 @@ npm start                                           # http://localhost:3000
 
 Tài khoản demo: Quản trị hệ thống (toàn quyền), Quàng Văn Thư (lập phiếu Tà Cọ), Lò Văn Thìn (GĐ NM Tà Cọ), Trần Minh Khoa (TP Kỹ thuật), Phạm Văn Hảo (CB PKT), Nguyễn Văn Hùng / Lê Đắc Dần (Ban GĐ), Đỗ Thị Lan (TP Kế hoạch), Nguyễn Thị An / Vũ Đức Bình / Hoàng Văn Cường (NV Kế hoạch), Lường Thị Mai (Thủ kho Tà Cọ).
 
-## 6. Việc còn lại / cần người dùng xác nhận
+## 6. Đợt rà soát và sửa lỗi (07/10/2026)
+
+Sau khi hoàn thiện chức năng, toàn bộ mã nguồn được rà soát lại trên 5 khía cạnh (quy trình, phân quyền, giao diện web, hạ tầng, xuất Excel) và từng lỗi được kiểm chứng lại bằng cách dựng lại tình huống. 36 lỗi đã sửa, nhóm lại như sau:
+
+**Làm sai dữ liệu người dùng nhập**
+- Form nhận hàng và form so sánh giá: khi phiếu có id vật tư là số nhỏ, thư viện phân tích form gộp thành mảng làm số lượng nhận / nhà cung cấp chọn bị gán sang dòng khác. Đã đổi tên trường thành `i<id>` và có bài kiểm thử đi qua đúng các form này.
+- Ô gợi ý mã vật tư bị khung bảng che mất, không mở ở form thêm dòng mới, và giữ lại mã cũ khi người dùng gõ lại tên khác; đổi nhà máy không xóa mã riêng đã chọn.
+- Nhập lại tồn kho: trước đây sửa một dòng là đặt lại số lượng, nay tách rõ "nhập thêm" (cộng dồn) và "sửa tồn thực tế" (có chặn ghi đè khi tồn vừa thay đổi).
+
+**Lọt dữ liệu / phân quyền**
+- API gợi ý vật tư trả mã riêng và tồn kho của nhà máy người dùng không có quyền.
+- Tổng tồn trong danh mục mã vật tư tính cả kho người dùng không được xem.
+- Tên nhà cung cấp lọt vào lịch sử phiếu khi báo giá còn niêm phong; báo giá mở niêm phong sớm khi TP bỏ giao người chưa gửi.
+- Chuyển hướng sau đăng nhập có thể bị lợi dụng để đưa người dùng ra trang ngoài.
+
+**Phiếu bị treo / lỗi 500**
+- Phiếu đứng ở "Đang báo giá" khi một người được giao đi vắng: thêm thao tác "TP kết thúc báo giá thay" kèm lý do.
+- Bộ lọc danh sách phiếu trả lỗi 500 với tham số lạ trên URL.
+- Vật tư không cần báo giá cạnh tranh làm bước tổng hợp so sánh giá không trình được.
+- Số phiếu trùng nhau giữa các nhà máy dùng chung ký hiệu (vd `PNC-TC&NC3-SBM`).
+- Phiếu xuất kho có nhiều dòng cùng một vật tư không cộng dồn khi kiểm tra tồn.
+
+**Vận hành**
+- Sao lưu: SQLite bật WAL nên chép 1 file là không đủ; thêm `npm run backup` dùng `VACUUM INTO`.
+- Đồng bộ SSO: nếu SSO lỗi hoặc phân trang trả về thiếu người thì trước đây ngưng hoạt động hàng loạt CBCNV; nay bỏ qua bước đó và cảnh báo.
+- Đường dẫn CSDL / thư mục tệp tính theo thư mục cài đặt thay vì thư mục đang chạy lệnh.
+- Tệp đính kèm quá 20MB, cookie hỏng, dữ liệu SSO lạ: báo lỗi rõ ràng thay vì lỗi hệ thống; lỗi khi lưu form giữ lại dữ liệu đã nhập.
+- Excel phiếu nhu cầu và BM.06: lặp lại dòng tiêu đề khi in nhiều trang, "Nơi nhận" lấy theo cài đặt.
+
+## 7. Việc còn lại / cần người dùng xác nhận
 
 - [ ] **Tên đầy đủ 3 nhà máy** theo mã kho KHONATAU, KHOSS3, KHOTG (đang tạm "NMTĐ Nậm Tàu", "NMTĐ SS3", "NMTĐ TG") và ký hiệu số phiếu từng nhà máy – sửa được trong Cài đặt.
 - [ ] **Thông tin API của SSO** (địa chỉ, client id, định dạng danh bạ) để chuyển sang `SSO_MODE=oidc`; nếu SSO không theo OIDC thì viết thêm adapter.
@@ -104,4 +135,4 @@ Tài khoản demo: Quản trị hệ thống (toàn quyền), Quàng Văn Thư (
 - [ ] Thông báo email / Zalo khi có phiếu chờ xử lý (hiện có danh sách "Việc cần tôi xử lý" trong app).
 - [ ] Xuất Excel bảng so sánh giá để trình ký ngoài.
 - [ ] Báo cáo nhập–xuất–tồn theo kỳ, cảnh báo tồn tối thiểu.
-- [ ] Hướng dẫn triển khai lên máy chủ công ty (Windows service / Docker, HTTPS, sao lưu file CSDL).
+- [ ] Hướng dẫn triển khai lên máy chủ công ty (Windows service / Docker, HTTPS, hẹn giờ chạy `npm run backup`).

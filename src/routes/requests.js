@@ -1,11 +1,16 @@
 'use strict';
+const fs = require('node:fs');
 const path = require('node:path');
 const express = require('express');
 const config = require('../config');
 const svc = require('../services/requests');
 const { requestWorkbook } = require('../exports/excel');
 const { usersWith } = require('../auth/access');
+const { toArray } = require('../services/util');
 const { factoriesFor, allFactories, upload, fixName, sendWorkbook, forbidden } = require('./common');
+
+// Thao tác có tệp đính kèm
+const FILE_ACTIONS = new Set(['quote_add', 'price_external']);
 
 module.exports = (db) => {
   const r = express.Router();
@@ -62,8 +67,24 @@ module.exports = (db) => {
     });
   });
 
+  /** Lỗi nhập liệu: hiển thị lại form với dữ liệu người dùng vừa nhập thay vì xóa trắng. */
+  const keepForm = (req, res, err, row, opts) => {
+    if (!err.status || err.status >= 500) throw err;
+    res.status(err.status).render('requests/form', {
+      ...opts,
+      row: { ...row, ...req.body },
+      items: toArray(req.body.items).map((it) => ({ ...it, material_code: it.material_id ? db.one('SELECT code FROM materials WHERE id = ?', Number(it.material_id))?.code : '' })),
+      error: err.message,
+    });
+  };
+
   r.post('/moi', (req, res) => {
-    const id = svc.create(db, req.user, req.access, req.body);
+    let id;
+    try {
+      id = svc.create(db, req.user, req.access, req.body);
+    } catch (err) {
+      return keepForm(req, res, err, {}, { title: 'Lập phiếu đề xuất vật tư', factories: factoriesFor(db, req.access, 'request.create'), pktMode: false });
+    }
     saveThen(req, res, id, 'Đã lưu phiếu');
   });
 
@@ -103,13 +124,37 @@ module.exports = (db) => {
 
   r.post('/:id/sua', (req, res) => {
     const id = Number(req.params.id);
-    svc.update(db, req.user, req.access, id, req.body);
+    try {
+      svc.update(db, req.user, req.access, id, req.body);
+    } catch (err) {
+      const row = svc.get(db, id);
+      if (!row) throw err;
+      const pktMode = ['CHO_PKT', 'CHO_TPKT'].includes(row.status);
+      return keepForm(req, res, err, row, { title: `Sửa phiếu ${row.number || 'nháp'}`, factories: allFactories(db).filter((f) => f.id === row.factory_id), pktMode });
+    }
     saveThen(req, res, id, 'Đã lưu phiếu');
   });
 
-  r.post('/:id/thao-tac/:action', upload.single('file'), (req, res) => {
+  // Kiểm tra quyền TRƯỚC khi nhận tệp tải lên, và chỉ nhận tệp cho thao tác cần tệp
+  const guardAction = (req, res, next) => {
+    const row = svc.get(db, Number(req.params.id));
+    if (!row) return res.status(404).render('error', { title: 'Không tìm thấy', message: 'Không tìm thấy phiếu đề xuất' });
+    if (!svc.availableActions(db, req.access, req.user, row).has(req.params.action)) {
+      return forbidden(res, `Bạn không thể thực hiện "${svc.ACTION_LABEL[req.params.action] || req.params.action}" ở trạng thái hiện tại của phiếu.`);
+    }
+    if (FILE_ACTIONS.has(req.params.action)) return upload.single('file')(req, res, next);
+    next();
+  };
+
+  r.post('/:id/thao-tac/:action', guardAction, (req, res) => {
     const id = Number(req.params.id);
-    svc.act(db, req.user, req.access, id, req.params.action, req.body, fixName(req.file));
+    const file = fixName(req.file);
+    try {
+      svc.act(db, req.user, req.access, id, req.params.action, req.body, file);
+    } catch (err) {
+      if (file) fs.unlink(file.path, () => {});
+      throw err;
+    }
     res.flash('success', `Đã thực hiện: ${svc.ACTION_LABEL[req.params.action] || req.params.action}`);
     res.redirect(`/de-xuat/${id}`);
   });

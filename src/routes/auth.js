@@ -5,7 +5,7 @@ const { getProvider } = require('../sso');
 const { upsertUser } = require('../sso/sync');
 const { createSession, destroySession } = require('../auth/session');
 
-const safeNext = (n) => (typeof n === 'string' && n.startsWith('/') && !n.startsWith('//') ? n : '/');
+const { safeNext } = require('../services/util');
 
 module.exports = (db) => {
   const r = express.Router();

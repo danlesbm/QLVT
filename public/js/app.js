@@ -11,7 +11,7 @@
   }
   function addRow(table, values) {
     var tpl = document.querySelector(table.dataset.rows);
-    var idx = Number(table.dataset.next || table.querySelectorAll('tbody tr').length);
+    var idx = nextIndex(table);
     table.dataset.next = idx + 1;
     var html = tpl.innerHTML.replace(/__i__/g, idx);
     var tbody = table.querySelector('tbody');
@@ -25,15 +25,23 @@
   function fill(tr, v) {
     Object.keys(v).forEach(function (k) {
       var el = tr.querySelector('[data-f="' + k + '"]');
-      if (el && v[k] != null) {
-        if (el.tagName === 'SPAN' || el.tagName === 'DIV') el.textContent = v[k];
-        else el.value = v[k];
-      }
+      if (!el) return;
+      var val = v[k] == null ? '' : v[k];
+      if (el.tagName === 'SPAN' || el.tagName === 'DIV') el.textContent = val;
+      else el.value = val;
     });
+  }
+  // Chỉ số dòng mới luôn lớn hơn mọi dòng đang có (tránh trùng tên trường khi xóa rồi thêm dòng)
+  function nextIndex(table) {
+    var max = -1;
+    table.querySelectorAll('[name^="items["]').forEach(function (el) {
+      var m = /^items\[(\d+)\]/.exec(el.name);
+      if (m) max = Math.max(max, Number(m[1]));
+    });
+    return Math.max(max + 1, Number(table.dataset.next || 0));
   }
   document.querySelectorAll('table[data-rows]').forEach(function (table) {
     if (!table.querySelector('tbody tr')) addRow(table);
-    bindAutocomplete(table);
   });
   document.addEventListener('click', function (e) {
     var add = e.target.closest('[data-add-row]');
@@ -56,11 +64,19 @@
     root.querySelectorAll('input[data-ac]').forEach(function (input) {
       if (input.dataset.bound) return;
       input.dataset.bound = '1';
-      var wrap = input.parentElement;
-      wrap.classList.add('ac-wrap');
+      // Danh sách gợi ý gắn vào body (position: fixed) để không bị bảng cuộn ngang cắt mất
       var list = document.createElement('div');
       list.className = 'ac-list d-none';
-      wrap.appendChild(list);
+      document.body.appendChild(list);
+      function place() {
+        var r = input.getBoundingClientRect();
+        list.style.left = Math.max(4, Math.min(r.left, window.innerWidth - Math.max(r.width, 420) - 4)) + 'px';
+        list.style.top = r.bottom + 2 + 'px';
+        list.style.minWidth = Math.max(r.width, 420) + 'px';
+        list.style.maxHeight = Math.max(160, window.innerHeight - r.bottom - 12) + 'px';
+      }
+      window.addEventListener('scroll', function () { if (items.length) place(); }, true);
+      window.addEventListener('resize', function () { if (items.length) place(); });
       var timer;
       var items = [];
       var on = -1;
@@ -77,6 +93,7 @@
           d.addEventListener('mousedown', function (e) { e.preventDefault(); choose(m); });
           list.appendChild(d);
         });
+        if (items.length) place();
         list.classList.toggle('d-none', !items.length);
       }
       function choose(m) {
@@ -91,8 +108,12 @@
       }
       input.addEventListener('input', function () {
         clearTimeout(timer);
-        var tr = input.closest('tr');
-        if (input.dataset.f === 'name' && tr) { var mid = tr.querySelector('[data-f="material_id"]'); if (mid) mid.value = ''; var mc = tr.querySelector('[data-f="material_code"]'); if (mc) mc.textContent = ''; }
+        // Gõ lại thì bỏ vật tư đã chọn trước đó (tránh lưu nhầm mã cũ)
+        var scope = input.closest('tr') || input.closest('form');
+        if (scope) {
+          var clear = input.dataset.f === 'name' ? { material_id: '', material_code: '' } : { material_id: '', unit: '', stock_qty: '' };
+          fill(scope, clear);
+        }
         var q = input.value.trim();
         if (q.length < 2) { items = []; render(); return; }
         timer = setTimeout(function () {
@@ -113,6 +134,15 @@
     });
   }
   window.qlvtBindAutocomplete = bindAutocomplete;
+  bindAutocomplete(document);
+
+  // Đổi nhà máy trên phiếu đề xuất: bỏ các mã đã chọn (mã riêng có thể không thuộc nhà máy mới)
+  var fsel = document.querySelector('select[name="factory_id"][data-clear-materials]');
+  if (fsel) {
+    fsel.addEventListener('change', function () {
+      document.querySelectorAll('#items tbody tr').forEach(function (tr) { fill(tr, { material_id: '', material_code: '' }); });
+    });
+  }
 
   // ----- Xác nhận trước khi gửi -----
   document.addEventListener('submit', function (e) {

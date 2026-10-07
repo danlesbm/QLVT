@@ -18,7 +18,8 @@ module.exports = (db) => {
   };
 
   r.get('/', (req, res) => {
-    const data = materials.list(db, { q: req.query.q, scope: req.query.scope, groupCode: req.query.group, page: req.query.page });
+    const data = materials.list(db, req.access, { q: req.query.q, scope: req.query.scope, groupCode: req.query.group, page: req.query.page });
+    for (const m of data.rows) m.editable = materials.canCode(req.access, m.factory_id);
     res.render('catalog/list', {
       title: 'Danh mục mã vật tư',
       ...data,

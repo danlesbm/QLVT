@@ -1,13 +1,13 @@
 'use strict';
 const { AppError, str } = require('./util');
-const { can } = require('../auth/access');
+const { can, factoryScope } = require('../auth/access');
 
 /** Người dùng có được tạo/sửa mã ở phạm vi này không (factoryId null = mã chung toàn công ty). */
 function canCode(access, factoryId) {
   return factoryId ? can(access, 'catalog.code_factory', factoryId) || can(access, 'catalog.code_company') : can(access, 'catalog.code_company');
 }
 
-function list(db, { q, scope, groupCode, page = 1, pageSize = 50 } = {}) {
+function list(db, access, { q, scope, groupCode, page = 1, pageSize = 50 } = {}) {
   const where = ['1 = 1'];
   const params = [];
   if (q) {
@@ -28,9 +28,13 @@ function list(db, { q, scope, groupCode, page = 1, pageSize = 50 } = {}) {
   const total = db.one(`SELECT COUNT(*) n ${base}`, ...params).n;
   const pages = Math.max(1, Math.ceil(total / pageSize));
   page = Math.min(Math.max(1, Number(page) || 1), pages);
+  // Tổng tồn chỉ tính các kho người dùng được xem
+  const sc = factoryScope(access, 'stock.view');
+  let qtyCol = '(SELECT IFNULL(SUM(quantity), 0) FROM stock s WHERE s.material_id = m.id)';
+  if (sc && !sc.length) qtyCol = 'NULL';
+  else if (sc) qtyCol = `(SELECT IFNULL(SUM(quantity), 0) FROM stock s WHERE s.material_id = m.id AND s.factory_id IN (${sc.map(Number).join(',')}))`;
   const rows = db.all(
-    `SELECT m.*, f.name AS factory_name,
-            (SELECT IFNULL(SUM(quantity), 0) FROM stock s WHERE s.material_id = m.id) AS total_qty
+    `SELECT m.*, f.name AS factory_name, ${qtyCol} AS total_qty
      ${base} ORDER BY m.code LIMIT ? OFFSET ?`,
     ...params, pageSize, (page - 1) * pageSize,
   );
@@ -58,10 +62,11 @@ function suggestCode(db, prefix) {
   let max = 0;
   let width = 3;
   for (const { code } of rows) {
-    const rest = code.slice(p.length + 1);
-    if (/^\d+$/.test(rest)) {
-      max = Math.max(max, Number(rest));
-      width = Math.max(width, rest.length);
+    // Tính cả các mã con sâu hơn (vd 3-00-...-001-064 chiếm đoạn 001)
+    const seg = code.slice(p.length + 1).split('-')[0];
+    if (/^\d+$/.test(seg)) {
+      max = Math.max(max, Number(seg));
+      width = Math.max(width, seg.length);
     }
   }
   return `${p}-${String(max + 1).padStart(width, '0')}`;
@@ -80,6 +85,14 @@ function save(db, user, access, data) {
   if (!/^[A-Za-z0-9.\-_/]+$/.test(code)) throw new AppError('Mã vật tư chỉ gồm chữ không dấu, số và các ký tự . - _ /');
   const dup = db.one('SELECT id FROM materials WHERE code = ? AND id <> ?', code, id || 0);
   if (dup) throw new AppError(`Mã ${code} đã tồn tại`);
+  // Không chuyển thành mã riêng một nhà máy khi nhà máy khác còn tồn vật tư này
+  if (existing && factoryId && factoryId !== existing.factory_id) {
+    const other = db.one(
+      'SELECT f.name FROM stock s JOIN factories f ON f.id = s.factory_id WHERE s.material_id = ? AND s.factory_id <> ? AND s.quantity <> 0',
+      id, factoryId,
+    );
+    if (other) throw new AppError(`Mã đang có tồn ở ${other.name}, không thể chuyển thành mã riêng của nhà máy khác`);
+  }
   const vals = [code, name, str(data.spec), str(data.manufacturer), str(data.unit), factoryId, str(data.note), data.active === '0' ? 0 : 1];
   if (existing) {
     db.run(

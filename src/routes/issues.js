@@ -2,6 +2,7 @@
 const express = require('express');
 const svc = require('../services/issues');
 const { issueWorkbook } = require('../exports/excel');
+const { toArray } = require('../services/util');
 const { factoriesFor, allFactories, sendWorkbook, forbidden } = require('./common');
 
 module.exports = (db) => {
@@ -52,8 +53,30 @@ module.exports = (db) => {
     });
   });
 
+  /** Lỗi nhập liệu: hiển thị lại form với dữ liệu vừa nhập (kèm thông tin vật tư đã chọn). */
+  const keepForm = (req, res, err, row, title, factories) => {
+    if (!err.status || err.status >= 500) throw err;
+    const fid = Number(row.factory_id || req.body.factory_id);
+    const items = toArray(req.body.items).map((it) => {
+      const m = it.material_id
+        ? db.one(
+          `SELECT m.code, m.name, m.unit, (SELECT quantity FROM stock s WHERE s.material_id = m.id AND s.factory_id = ?) AS stock_qty
+             FROM materials m WHERE m.id = ?`,
+          fid, Number(it.material_id),
+        )
+        : null;
+      return { ...it, ...(m || {}) };
+    });
+    res.status(err.status).render('issues/form', { title, factories, row: { ...row, ...req.body }, items, error: err.message });
+  };
+
   r.post('/moi', (req, res) => {
-    const id = svc.create(db, req.user, req.access, req.body);
+    let id;
+    try {
+      id = svc.create(db, req.user, req.access, req.body);
+    } catch (err) {
+      return keepForm(req, res, err, {}, 'Lập phiếu xuất kho', factoriesFor(db, req.access, 'issue.create'));
+    }
     saveThen(req, res, id, 'Đã lưu phiếu');
   });
 
@@ -75,7 +98,13 @@ module.exports = (db) => {
 
   r.post('/:id/sua', (req, res) => {
     const id = Number(req.params.id);
-    svc.update(db, req.user, req.access, id, req.body);
+    try {
+      svc.update(db, req.user, req.access, id, req.body);
+    } catch (err) {
+      const row = svc.get(db, id);
+      if (!row) throw err;
+      return keepForm(req, res, err, row, `Sửa phiếu xuất ${row.number || 'nháp'}`, allFactories(db).filter((f) => f.id === row.factory_id));
+    }
     saveThen(req, res, id, 'Đã lưu phiếu');
   });
 
@@ -89,6 +118,7 @@ module.exports = (db) => {
   r.get('/:id/excel', async (req, res) => {
     const row = load(req, res);
     if (!row) return;
+    if (row.status === 'DA_HUY') return forbidden(res, 'Phiếu đã hủy, không tải được phiếu BM.06.');
     const wb = await issueWorkbook(db, row, svc.items(db, row.id));
     await sendWorkbook(res, wb, `Phieu-xuat-kho-${row.number || row.id}.xlsx`);
   });

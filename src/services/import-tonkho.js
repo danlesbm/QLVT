@@ -76,27 +76,36 @@ async function parse(buffer) {
 function apply(db, user, rows, { defaultFactoryId } = {}) {
   const result = { materials_created: 0, stock_rows: 0, factories_created: [], errors: [] };
   db.tx(() => {
-    const factories = new Map(db.all('SELECT id, warehouse_code FROM factories').map((f) => [f.warehouse_code, f.id]));
+    const up = (v) => String(v || '').trim().toUpperCase();
+    const factories = new Map(db.all('SELECT id, warehouse_code FROM factories WHERE warehouse_code IS NOT NULL').map((f) => [up(f.warehouse_code), f.id]));
     // Một mã có thể xuất hiện nhiều lần trong cùng một kho: cộng dồn số lượng
     const totals = new Map();
     for (const r of rows) {
-      let fid = r.warehouse ? factories.get(r.warehouse) : defaultFactoryId;
+      let fid = r.warehouse ? factories.get(up(r.warehouse)) : defaultFactoryId;
       if (!fid && r.warehouse) {
+        // Thử khớp theo mã nhà máy (vd KHOTACO -> TACO) trước khi tạo kho mới
         const code = r.warehouse.replace(/^KHO/i, '') || r.warehouse;
-        db.run('INSERT INTO factories (code, name, warehouse_code, warehouse_name, sort) VALUES (?, ?, ?, ?, 99)', code, `Nhà máy ${code}`, r.warehouse, r.warehouse);
-        fid = db.one('SELECT id FROM factories WHERE warehouse_code = ?', r.warehouse).id;
-        factories.set(r.warehouse, fid);
-        result.factories_created.push(r.warehouse);
+        const byCode = db.one('SELECT id FROM factories WHERE upper(code) = ?', up(code));
+        if (byCode) fid = byCode.id;
+        else {
+          fid = Number(db.run('INSERT INTO factories (code, name, warehouse_code, warehouse_name, sort) VALUES (?, ?, ?, ?, 99)', code, `Nhà máy ${code}`, r.warehouse, r.warehouse).lastInsertRowid);
+          result.factories_created.push(r.warehouse);
+        }
+        factories.set(up(r.warehouse), fid);
       }
       if (!fid) {
         result.errors.push(`Dòng ${r.line}: không xác định được kho`);
         continue;
       }
-      let m = db.one('SELECT id FROM materials WHERE code = ?', r.code);
+      let m = db.one('SELECT id, factory_id FROM materials WHERE code = ?', r.code);
       if (!m) {
         const ins = db.run('INSERT INTO materials (code, name, unit, created_by) VALUES (?, ?, ?, ?)', r.code, r.name || r.code, r.unit, user ? user.id : null);
-        m = { id: Number(ins.lastInsertRowid) };
+        m = { id: Number(ins.lastInsertRowid), factory_id: null };
         result.materials_created++;
+      }
+      if (m.factory_id && m.factory_id !== fid) {
+        result.errors.push(`Dòng ${r.line}: mã ${r.code} là mã riêng của nhà máy khác, bỏ qua`);
+        continue;
       }
       const key = `${fid}:${m.id}`;
       totals.set(key, { fid, mid: m.id, qty: (totals.get(key)?.qty || 0) + r.quantity });
