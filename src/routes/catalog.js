@@ -35,6 +35,11 @@ module.exports = (db) => {
     const scopes = codeScopes(req.access);
     if (!scopes.length) return forbidden(res, 'Bạn chưa được phân quyền đánh mã vật tư.');
     if (row && !materials.canCode(req.access, row.factory_id)) return forbidden(res, 'Bạn không có quyền sửa mã vật tư này.');
+    // Mã riêng của nhà máy đã ngưng hoạt động: vẫn giữ phạm vi cũ, tránh lưu lại thành mã chung
+    if (row && row.factory_id && !scopes.some((x) => x.id === row.factory_id)) {
+      const f = db.one('SELECT name FROM factories WHERE id = ?', row.factory_id);
+      scopes.push({ id: row.factory_id, name: `Mã riêng ${f ? f.name : row.factory_id} (ngưng hoạt động)` });
+    }
     res.render('catalog/form', { title: row ? `Sửa mã ${row.code}` : 'Thêm mã vật tư', row, scopes, groups: materials.groups(db), back: req.query.back });
   };
   r.get('/moi', (req, res) => form(req, res, null));

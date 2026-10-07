@@ -136,8 +136,9 @@ function log(db, x, action, to, user, comment) {
 
 function create(db, user, access, data) {
   const factoryId = Number(data.factory_id);
-  if (!db.one('SELECT 1 FROM factories WHERE id = ? AND active = 1', factoryId)) throw new AppError('Chưa chọn kho xuất');
+  if (!factoryId) throw new AppError('Chưa chọn kho xuất');
   if (!can(access, 'issue.create', factoryId)) throw new AppError('Bạn không có quyền lập phiếu xuất cho kho này', 403);
+  if (!db.one('SELECT 1 FROM factories WHERE id = ? AND active = 1', factoryId)) throw new AppError('Chưa chọn kho xuất');
   const header = writeHeader(data);
   const list = parseItems(db, factoryId, data.items);
   return db.tx(() => {

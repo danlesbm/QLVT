@@ -53,16 +53,19 @@ module.exports = (db) => {
     });
   });
 
-  /** Lỗi nhập liệu: hiển thị lại form với dữ liệu vừa nhập (kèm thông tin vật tư đã chọn). */
+  /**
+   * Lỗi nhập liệu (400): hiển thị lại form với dữ liệu vừa nhập (kèm thông tin vật tư đã chọn).
+   * Lỗi quyền (403/404) để bộ xử lý lỗi chung báo, tránh lộ tồn kho nhà máy khác.
+   */
   const keepForm = (req, res, err, row, title, factories) => {
-    if (!err.status || err.status >= 500) throw err;
+    if (err.status !== 400) throw err;
     const fid = Number(row.factory_id || req.body.factory_id);
     const items = toArray(req.body.items).map((it) => {
       const m = it.material_id
         ? db.one(
           `SELECT m.code, m.name, m.unit, (SELECT quantity FROM stock s WHERE s.material_id = m.id AND s.factory_id = ?) AS stock_qty
-             FROM materials m WHERE m.id = ?`,
-          fid, Number(it.material_id),
+             FROM materials m WHERE m.id = ? AND (m.factory_id IS NULL OR m.factory_id = ?)`,
+          fid, Number(it.material_id), fid,
         )
         : null;
       return { ...it, ...(m || {}) };

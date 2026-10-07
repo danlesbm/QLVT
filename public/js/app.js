@@ -98,9 +98,16 @@
       }
       function choose(m) {
         var tr = input.closest('tr') || input.closest('form');
-        fill(tr, {
-          material_id: m.id, material_code: m.code, name: m.name, unit: m.unit, spec: m.spec,
-          model: m.manufacturer, manufacturer: m.manufacturer, stock_qty: m.stock_qty != null ? m.stock_qty : 0,
+        fill(tr, { material_id: m.id, material_code: m.code, name: m.name, stock_qty: m.stock_qty != null ? m.stock_qty : 0 });
+        // Đơn vị / thông số / hãng: mã có dữ liệu thì điền; mã để trống thì chỉ xóa chữ do lần chọn trước điền,
+        // không xóa chữ người dùng tự gõ
+        var desc = { unit: m.unit, spec: m.spec, model: m.manufacturer, manufacturer: m.manufacturer };
+        Object.keys(desc).forEach(function (k) {
+          var el = tr.querySelector('[data-f="' + k + '"]');
+          if (!el) return;
+          var o = {};
+          if (desc[k]) { o[k] = desc[k]; fill(tr, o); el.dataset.auto = '1'; }
+          else if (el.dataset.auto) { o[k] = ''; fill(tr, o); delete el.dataset.auto; }
         });
         if (input.dataset.f !== 'name') input.value = m.code + ' - ' + m.name;
         items = [];
@@ -133,6 +140,10 @@
       input.addEventListener('blur', function () { setTimeout(function () { items = []; render(); }, 150); });
     });
   }
+  // Người dùng sửa ô do gợi ý điền thì ô đó thành của người dùng
+  document.addEventListener('input', function (e) {
+    if (e.target.dataset && e.target.dataset.auto) delete e.target.dataset.auto;
+  });
   window.qlvtBindAutocomplete = bindAutocomplete;
   bindAutocomplete(document);
 
@@ -144,10 +155,19 @@
     });
   }
 
-  // ----- Xác nhận trước khi gửi -----
+  // ----- Xác nhận trước khi gửi; khóa nút gửi để tránh bấm 2 lần -----
   document.addEventListener('submit', function (e) {
-    var msg = e.target.dataset.confirm;
-    if (msg && !window.confirm(msg)) e.preventDefault();
+    var form = e.target;
+    var msg = form.dataset.confirm;
+    if (msg && !window.confirm(msg)) { e.preventDefault(); return; }
+    if (e.defaultPrevented || (form.method || '').toLowerCase() !== 'post') return;
+    var btns = form.querySelectorAll('button[type="submit"], button:not([type]), input[type="submit"]');
+    // Khóa sau khi trình duyệt đã lấy giá trị nút được bấm; mở lại sau ít giây (vd tải tệp, trang không chuyển)
+    setTimeout(function () { btns.forEach(function (b) { b.disabled = true; }); }, 0);
+    setTimeout(function () { btns.forEach(function (b) { b.disabled = false; }); }, 8000);
+  });
+  window.addEventListener('pageshow', function (e) {
+    if (e.persisted) document.querySelectorAll('form button:disabled, form input[type="submit"]:disabled').forEach(function (b) { b.disabled = false; });
   });
 
   // ----- Gợi ý mã tiếp theo -----

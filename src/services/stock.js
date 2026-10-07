@@ -13,7 +13,8 @@ function move(db, { factoryId, materialId, delta, kind, refType = null, refId = 
     row = db.one('SELECT * FROM stock WHERE factory_id = ? AND material_id = ?', factoryId, materialId);
   }
   const balance = Math.round((row.quantity + delta) * 1e6) / 1e6;
-  if (balance < 0 && !allowNegative) {
+  // Chỉ chặn khi xuất làm tồn âm; nhập thêm vào dòng đang âm (dữ liệu cũ) vẫn được
+  if (balance < 0 && delta < 0 && !allowNegative) {
     const m = db.one('SELECT code, name FROM materials WHERE id = ?', materialId);
     throw new AppError(`Không đủ tồn kho: ${m.code} - ${m.name} (tồn ${row.quantity}, cần xuất ${-delta})`);
   }
@@ -74,6 +75,13 @@ function save(db, user, access, data) {
   const qty = num(data.quantity);
   if (qty == null || qty < 0 || (mode === 'add' && qty === 0)) throw new AppError(mode === 'add' ? 'Số lượng nhập thêm phải lớn hơn 0' : 'Số lượng không hợp lệ');
   return db.tx(() => {
+    if (mode === 'add' && str(data.form_token)) {
+      if (db.one('SELECT 1 FROM form_tokens WHERE token = ?', str(data.form_token))) {
+        throw new AppError('Lượt nhập này đã được lưu rồi (do bấm Lưu 2 lần hoặc gửi lại form cũ) nên không cộng thêm. Kiểm tra lại tồn kho trước khi nhập tiếp.', 409);
+      }
+      db.run(`DELETE FROM form_tokens WHERE created_at < datetime('now','localtime','-30 days')`);
+      db.run('INSERT INTO form_tokens (token, user_id) VALUES (?, ?)', str(data.form_token), user.id);
+    }
     const cur = db.one('SELECT * FROM stock WHERE factory_id = ? AND material_id = ?', factoryId, materialId);
     const before = cur ? cur.quantity : 0;
     let delta = qty;

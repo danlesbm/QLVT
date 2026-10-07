@@ -76,8 +76,9 @@ module.exports = (db) => {
     const code = str(b.code);
     const name = str(b.name);
     if (!code || !name) throw new AppError('Nhập mã và tên nhà máy');
-    if (db.one('SELECT 1 FROM factories WHERE code = ? AND id <> ?', code, id || 0)) throw new AppError(`Mã nhà máy ${code} đã tồn tại`);
-    if (str(b.warehouse_code) && db.one('SELECT 1 FROM factories WHERE warehouse_code = ? AND id <> ?', str(b.warehouse_code), id || 0)) throw new AppError(`Mã kho ${b.warehouse_code} đã dùng cho nhà máy khác`);
+    // So khớp không phân biệt hoa thường, giống cách import tồn kho tìm kho theo mã
+    if (db.one('SELECT 1 FROM factories WHERE upper(code) = upper(?) AND id <> ?', code, id || 0)) throw new AppError(`Mã nhà máy ${code} đã tồn tại`);
+    if (str(b.warehouse_code) && db.one('SELECT 1 FROM factories WHERE upper(warehouse_code) = upper(?) AND id <> ?', str(b.warehouse_code), id || 0)) throw new AppError(`Mã kho ${b.warehouse_code} đã dùng cho nhà máy khác`);
     const vals = [code, name, str(b.warehouse_code), str(b.warehouse_name), str(b.address), str(b.request_prefix), b.director_id ? Number(b.director_id) : null, Number(b.sort) || 0, b.active ? 1 : 0];
     db.tx(() => {
       let fid = id;

@@ -318,8 +318,9 @@ function replaceItems(db, requestId, list) {
 
 function create(db, user, access, data) {
   const factoryId = Number(data.factory_id);
-  if (!db.one('SELECT 1 FROM factories WHERE id = ? AND active = 1', factoryId)) throw new AppError('Chưa chọn nhà máy');
+  if (!factoryId) throw new AppError('Chưa chọn nhà máy');
   if (!can(access, 'request.create', factoryId)) throw new AppError('Bạn không có quyền lập phiếu cho nhà máy này', 403);
+  if (!db.one('SELECT 1 FROM factories WHERE id = ? AND active = 1', factoryId)) throw new AppError('Chưa chọn nhà máy');
   const title = str(data.title);
   if (!title) throw new AppError('Nhập tiêu đề phiếu');
   const list = parseItems(db, factoryId, data.items);
@@ -356,10 +357,10 @@ function update(db, user, access, id, data) {
 function nextNumber(db, r) {
   const year = new Date().getFullYear();
   const prefix = r.request_prefix || `PNC-${r.factory_code}`;
+  // Tính theo ký hiệu đã in trên số phiếu (không theo ký hiệu hiện tại của nhà máy) để đổi ký hiệu vẫn không trùng số
   const seq = (db.one(
-    `SELECT MAX(q.seq) m FROM requests q JOIN factories f ON f.id = q.factory_id
-      WHERE COALESCE(f.request_prefix, 'PNC-' || f.code) = ? AND q.year = ?`,
-    prefix, year,
+    `SELECT MAX(seq) m FROM requests WHERE year = ? AND substr(number, instr(number, '/') + 1) = ?`,
+    year, prefix,
   ).m || 0) + 1;
   return { seq, year, number: `${seq}/${prefix}` };
 }
@@ -644,7 +645,7 @@ function todo(db, access, user) {
        JOIN factories f ON f.id = r.factory_id JOIN users u ON u.id = r.created_by
       WHERE r.status NOT IN ('HOAN_THANH','DA_HUY') ORDER BY r.updated_at`,
   );
-  const ignore = new Set(['cancel', 'edit', 'pkt_edit', 'quote_delete', 'quote_reopen', 'reject', 'assign_compiler']);
+  const ignore = new Set(['cancel', 'edit', 'pkt_edit', 'quote_delete', 'quote_reopen', 'quote_close', 'reject', 'assign_compiler']);
   return rows.filter((r) => {
     if (r.status === 'NHAP' && r.created_by !== user.id) return false;
     const acts = [...availableActions(db, access, user, r)].filter((a) => !ignore.has(a));

@@ -1,4 +1,5 @@
 'use strict';
+const crypto = require('node:crypto');
 const express = require('express');
 const stock = require('../services/stock');
 const imp = require('../services/import-tonkho');
@@ -47,7 +48,10 @@ module.exports = (db) => {
       if (!row || !can(req.access, 'stock.edit', row.factory_id)) return forbidden(res);
     }
     const preMaterial = !row && req.query.material_id ? db.one('SELECT id, code, name, unit FROM materials WHERE id = ?', Number(req.query.material_id)) : null;
-    res.render('stock/form', { title: row ? 'Cập nhật vật tư trong kho' : 'Nhập thêm vật tư vào kho', row, preMaterial, editable, query: req.query });
+    res.render('stock/form', {
+      title: row ? 'Cập nhật vật tư trong kho' : 'Nhập thêm vật tư vào kho', row, preMaterial, editable, query: req.query,
+      formToken: row ? null : crypto.randomUUID(),
+    });
   });
 
   r.post('/luu', (req, res) => {

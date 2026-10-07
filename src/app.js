@@ -4,6 +4,7 @@ const express = require('express');
 const config = require('./config');
 const { parseCookies, sessionMiddleware, requireLogin, csrfCheck } = require('./auth/session');
 const view = require('./views/helpers');
+const { safeNext } = require('./services/util');
 
 function createApp(db) {
   const app = express();
@@ -76,8 +77,11 @@ function sameOriginPath(req) {
   if (!ref) return null;
   try {
     const u = new URL(ref);
-    if (u.host !== req.get('host')) return null;
-    return u.pathname + u.search;
+    // Sau reverse proxy, Host có thể là địa chỉ nội bộ: chấp nhận cả X-Forwarded-Host (đã bật trust proxy)
+    const hosts = [req.get('host'), ...String(req.get('x-forwarded-host') || '').split(',').map((h) => h.trim())].filter(Boolean);
+    if (!hosts.includes(u.host)) return null;
+    const p = safeNext(u.pathname + u.search);
+    return p === '/' && u.pathname !== '/' ? null : p;
   } catch {
     return null;
   }

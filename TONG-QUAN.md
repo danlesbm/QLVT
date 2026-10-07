@@ -72,7 +72,7 @@ Repo SSO và Payroll trên GitHub hiện gần như rỗng nên chưa có mẫu 
 
 ### Kỹ thuật
 - Chống CSRF cho mọi form, phiên đăng nhập lưu CSDL, cookie httpOnly, chỉ chuyển hướng trong nội bộ ứng dụng.
-- 28 bài kiểm thử tự động (`npm test`): toàn bộ quy trình, niêm phong báo giá, phân quyền theo nhà máy, xuất kho trừ tồn, xuất Excel, chặn CSRF, và các bài hồi quy cho đợt rà soát (khóa form, bộ lọc, cộng dồn tồn, an toàn đồng bộ SSO). CI GitHub Actions chạy test.
+- 36 bài kiểm thử tự động (`npm test`): toàn bộ quy trình, niêm phong báo giá, phân quyền theo nhà máy, xuất kho trừ tồn, xuất Excel, chặn CSRF, và các bài hồi quy cho đợt rà soát (khóa form, bộ lọc, cộng dồn tồn, an toàn đồng bộ SSO). CI GitHub Actions chạy test.
 - Sao lưu: `npm run backup` tạo bản sao nhất quán của CSDL (`VACUUM INTO`, an toàn khi đang bật WAL) vào `BACKUP_DIR`; cần sao lưu kèm thư mục `UPLOAD_DIR` (tệp báo giá, tờ trình).
 
 ## 4. Kết nối SSO
@@ -126,6 +126,13 @@ Sau khi hoàn thiện chức năng, toàn bộ mã nguồn được rà soát l�
 - Đường dẫn CSDL / thư mục tệp tính theo thư mục cài đặt thay vì thư mục đang chạy lệnh.
 - Tệp đính kèm quá 20MB, cookie hỏng, dữ liệu SSO lạ: báo lỗi rõ ràng thay vì lỗi hệ thống; lỗi khi lưu form giữ lại dữ liệu đã nhập.
 - Excel phiếu nhu cầu và BM.06: lặp lại dòng tiêu đề khi in nhiều trang, "Nơi nhận" lấy theo cài đặt.
+
+**Kiểm chứng lại sau khi sửa** (rà soát bản sửa theo 4 góc nhìn, phản biện từng phát hiện bằng chạy thử), sửa thêm:
+- Form lập phiếu bị từ chối vì không có quyền vẫn hiện lại tồn kho của nhà máy khác.
+- Import tồn kho đặt tồn về 0 khi file không có cột số lượng hoặc số lượng ghi dạng chữ không rõ nghĩa (vd "1,250"): nay từ chối cả file và chỉ rõ dòng lỗi, chưa ghi gì vào kho.
+- Bấm "Lưu" 2 lần hoặc quay lại gửi lại form nhập thêm làm tồn bị cộng 2 lần: mỗi form có mã dùng một lần, nút Lưu bị khóa khi đang gửi.
+- Phiếu đang chờ nhân viên báo giá hiện nhầm trong "Việc cần tôi xử lý" của TP Kế hoạch.
+- Nhập thêm vào dòng tồn đang âm (dữ liệu cũ) bị chặn; đổi ký hiệu số phiếu của một nhà máy có thể làm trùng số; mã kho trùng nhau khác hoa thường; sửa mã riêng của nhà máy đã ngưng hoạt động làm mã thành mã chung; chọn mã không có thông số xóa mất chữ người dùng tự gõ; `npm run backup` khi sai đường dẫn CSDL tạo file rỗng.
 
 ## 7. Việc còn lại / cần người dùng xác nhận
 

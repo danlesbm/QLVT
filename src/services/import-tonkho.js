@@ -26,6 +26,30 @@ const cellText = (v) => {
 };
 
 /**
+ * Đọc số lượng trong ô Excel. Ô số giữ nguyên; ô chữ chỉ nhận khi đọc được một nghĩa duy nhất
+ * (vd "1.250,5" hoặc "12,5"). "1,250" / "1.250" có thể là 1250 hoặc 1,25 nên trả NaN để báo lỗi.
+ */
+function parseQty(v) {
+  if (v == null || v === '') return 0;
+  if (typeof v === 'number') return v;
+  const s = String(v).replace(/[\s\u00a0]/g, '');
+  if (s === '') return 0;
+  if (!/^-?[\d.,]+$/.test(s)) return NaN;
+  const seps = s.match(/[.,]/g) || [];
+  if (!seps.length) return Number(s);
+  const last = Math.max(s.lastIndexOf('.'), s.lastIndexOf(','));
+  const kinds = new Set(seps);
+  if (kinds.size === 1 && seps.length === 1 && s.length - last - 1 === 3) return NaN; // không rõ phân cách nghìn hay thập phân
+  if (kinds.size === 1 && seps.length > 1) {
+    // Chỉ một loại dấu, lặp nhiều lần: là dấu phân cách nghìn
+    return /^-?\d{1,3}([.,]\d{3})+$/.test(s) ? Number(s.replace(/[.,]/g, '')) : NaN;
+  }
+  const int = s.slice(0, last).replace(/[.,]/g, '');
+  const x = Number(`${int}.${s.slice(last + 1)}`);
+  return Number.isFinite(x) ? x : NaN;
+}
+
+/**
  * Đọc file "Báo cáo tồn kho" xuất từ phần mềm cũ (cột STT, Mã hàng, Tên hàng, ĐVT, SL tồn, Giá trị tồn, Kho hàng).
  * Trả về các dòng đã chuẩn hóa.
  */
@@ -37,6 +61,7 @@ async function parse(buffer) {
   let header = null;
   const cols = {};
   const rows = [];
+  const bad = [];
   ws.eachRow((row, idx) => {
     const vals = Array.from(row.values, cellText).map((v) => (typeof v === 'string' ? v.trim() : v));
     if (!header) {
@@ -48,6 +73,7 @@ async function parse(buffer) {
         cols.name = lower.findIndex((v) => v.startsWith('tên'));
         cols.unit = lower.findIndex((v) => v === 'đvt' || v.startsWith('đơn vị'));
         cols.qty = lower.findIndex((v) => v.startsWith('sl') || v.startsWith('số lượng'));
+        if (cols.qty < 0) cols.qty = lower.findIndex((v) => v.startsWith('tồn cuối'));
         cols.wh = lower.findIndex((v) => v.startsWith('kho'));
       }
       return;
@@ -55,17 +81,24 @@ async function parse(buffer) {
     const code = String(vals[cols.code] ?? '').trim();
     // Bỏ qua dòng tổng cộng / chữ ký cuối báo cáo
     if (!code || !vals[cols.name] || /^tổng/i.test(code)) return;
-    const qty = Number(vals[cols.qty]);
+    const qty = parseQty(vals[cols.qty]);
+    if (!Number.isFinite(qty)) bad.push(`dòng ${idx} (${code}: "${vals[cols.qty]}")`);
     rows.push({
       line: idx,
       code,
       name: String(vals[cols.name] ?? '').replace(/\s+/g, ' ').trim(),
       unit: normUnit(vals[cols.unit]),
-      quantity: Number.isFinite(qty) ? qty : 0,
+      quantity: qty,
       warehouse: cols.wh > 0 ? String(vals[cols.wh] ?? '').trim() : '',
     });
   });
   if (!header) throw new AppError('Không tìm thấy dòng tiêu đề có cột "Mã hàng"');
+  // Thiếu cột hoặc có số lượng không đọc được thì từ chối cả file: import đặt lại tồn theo file nên không ghi nửa chừng
+  if (cols.name < 0) throw new AppError('Không tìm thấy cột "Tên hàng" trong file');
+  if (cols.qty < 0) throw new AppError('Không tìm thấy cột số lượng tồn ("SL tồn" / "Số lượng" / "Tồn cuối kỳ") trong file');
+  if (bad.length) {
+    throw new AppError(`Số lượng không hợp lệ ở ${bad.length} dòng, chưa ghi gì vào kho. Hãy để ô số lượng ở dạng số rồi import lại: ${bad.slice(0, 10).join('; ')}${bad.length > 10 ? '...' : ''}`);
+  }
   return rows;
 }
 
@@ -122,4 +155,4 @@ function apply(db, user, rows, { defaultFactoryId } = {}) {
   return result;
 }
 
-module.exports = { parse, apply, normUnit };
+module.exports = { parse, apply, normUnit, parseQty };

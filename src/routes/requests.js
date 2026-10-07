@@ -67,13 +67,18 @@ module.exports = (db) => {
     });
   });
 
-  /** Lỗi nhập liệu: hiển thị lại form với dữ liệu người dùng vừa nhập thay vì xóa trắng. */
+  /**
+   * Lỗi nhập liệu (400): hiển thị lại form với dữ liệu người dùng vừa nhập thay vì xóa trắng.
+   * Lỗi quyền (403/404) để bộ xử lý lỗi chung báo, tránh lộ nội dung phiếu.
+   */
   const keepForm = (req, res, err, row, opts) => {
-    if (!err.status || err.status >= 500) throw err;
+    if (err.status !== 400) throw err;
+    const fid = Number(row.factory_id || req.body.factory_id) || 0;
+    const code = (id) => db.one('SELECT code FROM materials WHERE id = ? AND (factory_id IS NULL OR factory_id = ?)', Number(id), fid)?.code || '';
     res.status(err.status).render('requests/form', {
       ...opts,
       row: { ...row, ...req.body },
-      items: toArray(req.body.items).map((it) => ({ ...it, material_code: it.material_id ? db.one('SELECT code FROM materials WHERE id = ?', Number(it.material_id))?.code : '' })),
+      items: toArray(req.body.items).map((it) => ({ ...it, material_code: it.material_id ? code(it.material_id) : '' })),
       error: err.message,
     });
   };

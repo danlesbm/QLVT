@@ -250,6 +250,72 @@ test('đồng bộ SSO không ngưng hoạt động hàng loạt khi danh bạ t
   assert.equal(db.one(`SELECT full_name FROM users WHERE sso_id = 'nv101'`).full_name, 'Lò Văn Thiêm', 'vẫn cập nhật hồ sơ');
 });
 
+// ---------------------------------------------------------------- đợt kiểm chứng lại
+
+test('phiếu đang chờ nhân viên báo giá không nằm trong việc cần làm của TP Kế hoạch', () => {
+  const { db, as, taco, mat } = setup();
+  const { id } = toQuoting(db, as, taco, mat);
+  const tpkh = as('nv020');
+  assert.ok(requests.todo(db, tpkh.access, tpkh.user).some((r) => r.id === id), 'chưa giao báo giá thì là việc của TP');
+  run(db, tpkh, id, 'assign_quoters', { quoter_ids: [as('nv021').user.id, as('nv022').user.id] });
+  assert.ok(!requests.todo(db, tpkh.access, tpkh.user).some((r) => r.id === id), 'đã giao thì chờ nhân viên, không phải việc của TP');
+  const an = as('nv021');
+  assert.ok(requests.todo(db, an.access, an.user).some((r) => r.id === id), 'là việc của nhân viên được giao');
+});
+
+test('nhập thêm cùng một form 2 lần chỉ cộng tồn 1 lần', () => {
+  const { db, as, taco, mat } = setup();
+  const tk = as('nv102');
+  const form = { factory_id: taco, material_id: mat, quantity: '10', mode: 'add', form_token: 'tok-1' };
+  stockSvc.save(db, tk.user, tk.access, form);
+  assert.throws(() => stockSvc.save(db, tk.user, tk.access, form), /đã được lưu rồi/);
+  assert.equal(db.one('SELECT quantity FROM stock WHERE factory_id = ? AND material_id = ?', taco, mat).quantity, 10);
+  stockSvc.save(db, tk.user, tk.access, { ...form, form_token: 'tok-2' });
+  assert.equal(db.one('SELECT quantity FROM stock WHERE factory_id = ? AND material_id = ?', taco, mat).quantity, 20);
+});
+
+test('nhập thêm vào dòng tồn đang âm (dữ liệu cũ) vẫn được, xuất quá tồn vẫn bị chặn', () => {
+  const { db, as, taco, mat } = setup();
+  const tk = as('nv102');
+  db.run('INSERT INTO stock (factory_id, material_id, quantity) VALUES (?, ?, -5)', taco, mat);
+  const row = stockSvc.save(db, tk.user, tk.access, { factory_id: taco, material_id: mat, quantity: '3', mode: 'add' });
+  assert.equal(row.quantity, -2);
+  db.tx(() => assert.throws(() => stockSvc.move(db, { factoryId: taco, materialId: mat, delta: -1, kind: 'XUAT' }), /Không đủ tồn kho/));
+});
+
+test('đổi ký hiệu số phiếu của một nhà máy không làm trùng số phiếu nhà máy còn lại', () => {
+  const { db, as, taco, nc3 } = setup();
+  db.run(`UPDATE factories SET request_prefix = 'PNC-TC&NC3-SBM' WHERE id IN (?, ?)`, taco, nc3);
+  const a = as('nv101');
+  const b = as('nv201');
+  const mk = (who, fid) => {
+    const id = requests.create(db, who.user, who.access, { factory_id: fid, title: 'x', items: [{ name: 'a', quantity: 1 }] });
+    run(db, who, id, 'submit');
+    return requests.get(db, id).number;
+  };
+  assert.equal(mk(a, taco), '1/PNC-TC&NC3-SBM');
+  assert.equal(mk(b, nc3), '2/PNC-TC&NC3-SBM');
+  db.run(`UPDATE factories SET request_prefix = 'PNC-NC3-SBM' WHERE id = ?`, nc3);
+  assert.equal(mk(a, taco), '3/PNC-TC&NC3-SBM', 'không được cấp lại số 2');
+  assert.equal(mk(b, nc3), '1/PNC-NC3-SBM');
+});
+
+test('import tồn kho từ chối file thiếu cột số lượng hoặc số lượng không rõ, không ghi gì vào kho', async () => {
+  const ExcelJS = require('exceljs');
+  const imp = require('../src/services/import-tonkho');
+  const xlsx = async (header, rows) => {
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Tồn kho');
+    ws.addRow(header);
+    rows.forEach((r) => ws.addRow(r));
+    return Buffer.from(await wb.xlsx.writeBuffer());
+  };
+  await assert.rejects(imp.parse(await xlsx(['STT', 'Mã hàng', 'Tên hàng', 'ĐVT', 'Giá trị', 'Kho hàng'], [[1, 'VT01', 'Vòng bi', 'CAI', 125, 'KHOTACO']])), /cột số lượng/);
+  await assert.rejects(imp.parse(await xlsx(['STT', 'Mã hàng', 'Tên hàng', 'ĐVT', 'SL tồn', 'Kho hàng'], [[1, 'VT01', 'Vòng bi', 'CAI', '1,250', 'KHOTACO']])), /không hợp lệ.*VT01/);
+  const ok = await imp.parse(await xlsx(['STT', 'Mã hàng', 'Tên hàng', 'ĐVT', 'Tồn cuối kỳ', 'Kho hàng'], [[1, 'VT01', 'Vòng bi', 'CAI', '1.250,5', 'KHOTACO'], [2, 'VT02', 'Dầu', 'LIT', 12, 'KHOTACO']]));
+  assert.deepEqual(ok.map((r) => r.quantity), [1250.5, 12]);
+});
+
 // ---------------------------------------------------------------- qua giao diện web
 
 let server;
@@ -378,4 +444,38 @@ test('phiếu đã hủy không tải được Excel', async () => {
   assert.equal(hdb.one('SELECT status FROM issues WHERE id = ?', id).status, 'DA_HUY');
   assert.equal((await tk(`/xuat-kho/${id}/excel`)).status, 403);
   assert.ok(!(await (await tk(`/xuat-kho/${id}`)).text()).includes('BM.06 (Excel)'));
+});
+
+test('form lỗi quyền không hiện lại tồn kho của nhà máy khác', async () => {
+  hdb.run('INSERT INTO stock (factory_id, material_id, quantity) VALUES (1, 1, 777) ON CONFLICT(factory_id, material_id) DO UPDATE SET quantity = 777');
+  const nc3 = await login('nv201');
+  for (const url of ['/xuat-kho/moi', '/de-xuat/moi']) {
+    const res = await nc3(url, { factory_id: '1', receiver_name: 'x', title: 'x', 'items[0][material_id]': '1', 'items[0][name]': 'a', 'items[0][qty_requested]': '1', 'items[0][quantity]': '1' });
+    const body = await res.text();
+    assert.ok(!body.includes('777'), `${url} lộ tồn kho Tà Cọ`);
+    assert.notEqual(res.status, 200);
+  }
+  // Lỗi nhập liệu của người có quyền vẫn giữ lại dữ liệu đã nhập
+  const tk = await login('nv102');
+  const res = await tk('/xuat-kho/moi', { factory_id: '1', receiver_name: '', 'items[0][material_id]': '1', 'items[0][qty_requested]': '2' });
+  assert.equal(res.status, 400);
+  const body = await res.text();
+  assert.match(body, /Nhập họ tên người nhận/);
+  assert.match(body, /1-01-00-001/);
+});
+
+test('mã nhà máy / mã kho trùng nhau khác hoa thường bị từ chối', async () => {
+  const admin = await login('nv900');
+  await admin('/cai-dat/nha-may', { code: 'taco', name: 'Trùng mã', warehouse_code: 'KHOMOI' });
+  await admin('/cai-dat/nha-may', { code: 'MOI', name: 'Trùng mã kho', warehouse_code: 'khotaco' });
+  assert.equal(hdb.one(`SELECT COUNT(*) n FROM factories WHERE upper(code) = 'TACO'`).n, 1);
+  assert.equal(hdb.one(`SELECT COUNT(*) n FROM factories WHERE upper(warehouse_code) = 'KHOTACO'`).n, 1);
+});
+
+test('sửa mã riêng của nhà máy đã ngưng hoạt động vẫn giữ là mã riêng', async () => {
+  const id = Number(hdb.run(`INSERT INTO factories (code, name, warehouse_code, active) VALUES ('CU', 'NMTĐ Cũ', 'KHOCU', 0)`).lastInsertRowid);
+  const mid = Number(hdb.run('INSERT INTO materials (code, name, factory_id) VALUES (?, ?, ?)', 'CU-001', 'Vật tư nhà máy cũ', id).lastInsertRowid);
+  const admin = await login('nv900');
+  const page = await (await admin(`/ma-vat-tu/${mid}/sua`)).text();
+  assert.match(page, new RegExp(`<option value="${id}" selected>Mã riêng NMTĐ Cũ \\(ngưng hoạt động\\)`));
 });

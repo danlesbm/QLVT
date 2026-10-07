@@ -128,6 +128,13 @@ CREATE TABLE IF NOT EXISTS stock_movements (
 );
 CREATE INDEX IF NOT EXISTS ix_movements ON stock_movements(factory_id, material_id);
 
+-- Mã dùng một lần của form nhập thêm vật tư: chống cộng tồn 2 lần khi bấm Lưu 2 lần / gửi lại form cũ
+CREATE TABLE IF NOT EXISTS form_tokens (
+  token       TEXT PRIMARY KEY,
+  user_id     INTEGER REFERENCES users(id),
+  created_at  TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
+
 -- ===== Phiếu đề xuất (nhu cầu) vật tư =====
 CREATE TABLE IF NOT EXISTS requests (
   id                  INTEGER PRIMARY KEY,
