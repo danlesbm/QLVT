@@ -1,0 +1,14 @@
+<% if (pages > 1) { %>
+<nav class="d-flex justify-content-between align-items-center mt-3">
+  <div class="small text-muted">Trang <%= page %>/<%= pages %> · <%= h.num(total) %> dòng</div>
+  <ul class="pagination pagination-sm mb-0">
+    <li class="page-item <%= page <= 1 ? 'disabled' : '' %>"><a class="page-link" href="<%= h.qs(query, { page: page - 1 }) %>">‹</a></li>
+    <% for (let p = Math.max(1, page - 2); p <= Math.min(pages, page + 2); p++) { %>
+      <li class="page-item <%= p === page ? 'active' : '' %>"><a class="page-link" href="<%= h.qs(query, { page: p }) %>"><%= p %></a></li>
+    <% } %>
+    <li class="page-item <%= page >= pages ? 'disabled' : '' %>"><a class="page-link" href="<%= h.qs(query, { page: page + 1 }) %>">›</a></li>
+  </ul>
+</nav>
+<% } else { %>
+<div class="small text-muted mt-2"><%= h.num(total) %> dòng</div>
+<% } %>

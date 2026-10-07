@@ -1,0 +1,12 @@
+<tr>
+  <td class="row-no text-muted"><%= typeof i === 'number' ? i + 1 : '' %></td>
+  <td class="w-name"><div><input data-ac data-f="search" class="form-control form-control-sm" value="<%= it.code ? it.code + ' - ' + it.name : '' %>" autocomplete="off" placeholder="Chọn vật tư..."></div>
+    <input type="hidden" name="items[<%= i %>][material_id]" data-f="material_id" value="<%= it.material_id || '' %>"></td>
+  <td><span data-f="unit"><%= it.unit || '' %></span></td>
+  <td class="text-end"><span data-f="stock_qty"><%= it.stock_qty ?? '' %></span></td>
+  <td><input name="items[<%= i %>][qty_requested]" type="number" step="any" min="0" class="form-control form-control-sm" value="<%= it.qty_requested ?? '' %>" style="width:95px"></td>
+  <td><input name="items[<%= i %>][qty_actual]" type="number" step="any" min="0" class="form-control form-control-sm" value="<%= it.qty_actual ?? '' %>" style="width:95px"></td>
+  <td><input name="items[<%= i %>][condition]" class="form-control form-control-sm" value="<%= it.condition || '' %>"></td>
+  <td><input name="items[<%= i %>][note]" class="form-control form-control-sm" value="<%= it.note || '' %>"></td>
+  <td><button class="btn btn-sm btn-link text-danger p-0" data-del-row><i class="bi bi-x-lg"></i></button></td>
+</tr>

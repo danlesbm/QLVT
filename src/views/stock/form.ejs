@@ -1,0 +1,39 @@
+<%- include('../partials/head') %>
+<% const pre = row || {}; const mid = row ? row.material_id : (query.material_id || ''); %>
+<div class="card" style="max-width:820px">
+  <div class="card-body">
+    <form method="post" action="/kho/luu">
+      <input type="hidden" name="_csrf" value="<%= csrf %>">
+      <div class="row g-3">
+        <div class="col-md-5"><label class="form-label">Kho / nhà máy <span class="text-danger">*</span></label>
+          <select name="factory_id" class="form-select" <%= row ? 'disabled' : '' %> required>
+            <% editable.forEach(f => { %><option value="<%= f.id %>" <%= String(pre.factory_id || query.factory_id) === String(f.id) ? 'selected' : '' %>><%= f.name %></option><% }) %>
+          </select>
+          <% if (row) { %><input type="hidden" name="factory_id" value="<%= row.factory_id %>"><% } %>
+        </div>
+        <div class="col-md-7"><label class="form-label">Vật tư <span class="text-danger">*</span></label>
+          <% if (row) { %>
+            <input class="form-control" value="<%= row.code %> - <%= row.name %>" disabled>
+          <% } else { %>
+            <div><input class="form-control" data-ac data-f="search" value="<%= preMaterial ? preMaterial.code + ' - ' + preMaterial.name : '' %>" placeholder="Gõ mã hoặc tên vật tư để chọn..." autocomplete="off"></div>
+            <div class="form-text">Chưa có mã? <a href="/ma-vat-tu/moi?back=kho">Thêm mã vật tư mới</a> (cần quyền đánh mã).</div>
+          <% } %>
+          <input type="hidden" name="material_id" data-f="material_id" value="<%= mid %>">
+        </div>
+        <div class="col-md-3"><label class="form-label">Số lượng tồn <span class="text-danger">*</span></label>
+          <input name="quantity" type="number" step="any" min="0" class="form-control" value="<%= pre.quantity ?? '' %>" required>
+          <div class="form-text">Nhập số lượng tồn thực tế sau khi cập nhật.</div></div>
+        <div class="col-md-3"><label class="form-label">Đơn vị</label><input class="form-control" data-f="unit" value="<%= pre.unit || (preMaterial && preMaterial.unit) || '' %>" disabled></div>
+        <div class="col-md-6"><label class="form-label">Tình trạng</label><input name="condition" class="form-control" value="<%= pre.condition || '' %>" placeholder="Mới / Đã qua sử dụng / Hỏng..."></div>
+        <div class="col-md-6"><label class="form-label">Vị trí để</label><input name="location" class="form-control" value="<%= pre.location || '' %>"></div>
+        <div class="col-md-6"><label class="form-label">Ghi chú</label><input name="note" class="form-control" value="<%= pre.note || '' %>"></div>
+        <div class="col-12"><label class="form-label">Lý do nhập / điều chỉnh (ghi vào sổ biến động)</label><input name="reason" class="form-control"></div>
+      </div>
+      <div class="mt-4 d-flex gap-2">
+        <button class="btn btn-primary"><i class="bi bi-save"></i> Lưu</button>
+        <a href="/kho" class="btn btn-outline-secondary">Hủy</a>
+      </div>
+    </form>
+  </div>
+</div>
+<%- include('../partials/foot') %>

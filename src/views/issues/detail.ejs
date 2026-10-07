@@ -1,0 +1,57 @@
+<%- include('../partials/head') %>
+<% const url = (a) => `/xuat-kho/${row.id}/thao-tac/${a}`; %>
+<div class="card mb-3"><div class="card-body d-flex flex-wrap gap-2">
+  <div class="me-auto">
+    <div class="small text-muted"><%= row.factory_name %> · Người lập: <%= row.creator_name %> · <%= h.date(row.created_at, true) %></div>
+    <h1 class="h4 mb-1">Phiếu xuất kho <%= row.number || '(nháp)' %></h1>
+    <%- include('../partials/badge', { st: STATUS[row.status] }) %>
+  </div>
+  <div class="d-flex gap-2 align-items-start no-print">
+    <% if (acts.has('edit')) { %><a href="/xuat-kho/<%= row.id %>/sua" class="btn btn-outline-primary"><i class="bi bi-pencil"></i> Sửa</a><% } %>
+    <a href="/xuat-kho/<%= row.id %>/excel" class="btn btn-success"><i class="bi bi-file-earmark-excel"></i> Tải phiếu BM.06</a>
+  </div>
+</div></div>
+<div class="row g-3">
+  <div class="col-xl-8">
+    <div class="card mb-3"><div class="card-body">
+      <dl class="row mb-0">
+        <dt class="col-sm-3">Người nhận hàng</dt><dd class="col-sm-9"><%= row.receiver_name %></dd>
+        <dt class="col-sm-3">Địa chỉ</dt><dd class="col-sm-9"><%= row.receiver_address || '-' %></dd>
+        <dt class="col-sm-3">Lý do xuất kho</dt><dd class="col-sm-9"><%= row.reason || '-' %></dd>
+        <dt class="col-sm-3">Xuất tại kho</dt><dd class="col-sm-9"><%= row.warehouse_name || row.factory_name %> · Địa điểm: <%= row.location || '-' %></dd>
+        <dt class="col-sm-3">Ngày xuất</dt><dd class="col-sm-9"><%= h.date(row.issue_date) || '-' %></dd>
+      </dl>
+    </div></div>
+    <div class="card"><div class="table-responsive"><table class="table table-sm mb-0">
+      <thead><tr><th>TT</th><th>Tên, quy cách vật tư</th><th>Mã</th><th>ĐVT</th><th class="text-end">SL yêu cầu</th><th class="text-end">SL thực xuất</th><th class="text-end">Tồn hiện tại</th><th>Tình trạng</th><th>Ghi chú</th></tr></thead>
+      <tbody>
+      <% items.forEach(it => { %><tr><td><%= it.line_no %></td><td><%= it.name %><% if (it.spec) { %><div class="small text-muted"><%= it.spec %></div><% } %></td><td class="small text-nowrap"><%= it.code %></td><td><%= it.unit || '' %></td>
+        <td class="text-end"><%= h.num(it.qty_requested) %></td><td class="text-end fw-semibold"><%= h.num(it.qty_actual) %></td>
+        <td class="text-end <%= row.status !== 'HOAN_THANH' && (it.stock_qty || 0) < it.qty_actual ? 'text-danger fw-bold' : 'text-muted' %>"><%= h.num(it.stock_qty || 0) %></td>
+        <td class="small"><%= it.condition || '' %></td><td class="small"><%= it.note || '' %></td></tr><% }) %>
+      </tbody>
+    </table></div></div>
+  </div>
+  <div class="col-xl-4">
+    <% if (acts.has('submit') || acts.has('approve') || acts.has('reject') || acts.has('cancel')) { %>
+    <div class="card mb-3 border-primary no-print"><div class="card-header text-bg-primary"><i class="bi bi-lightning-charge"></i> Xử lý phiếu</div>
+      <div class="card-body d-grid gap-3">
+        <% if (acts.has('submit')) { %><form method="post" action="<%= url('submit') %>"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="btn btn-primary w-100"><i class="bi bi-send"></i> Trình GĐ nhà máy duyệt</button></form><% } %>
+        <% if (acts.has('approve')) { %><form method="post" action="<%= url('approve') %>" data-confirm="Duyệt phiếu sẽ trừ tồn kho. Tiếp tục?"><input type="hidden" name="_csrf" value="<%= csrf %>">
+          <input name="comment" class="form-control form-control-sm mb-2" placeholder="Ý kiến (không bắt buộc)"><button class="btn btn-success w-100"><i class="bi bi-patch-check"></i> Duyệt - hoàn thành xuất kho</button></form><% } %>
+        <% if (acts.has('reject')) { %><form method="post" action="<%= url('reject') %>"><input type="hidden" name="_csrf" value="<%= csrf %>">
+          <textarea name="comment" class="form-control form-control-sm mb-2" rows="2" placeholder="Lý do từ chối *" required></textarea><button class="btn btn-outline-danger w-100"><i class="bi bi-x-circle"></i> Từ chối</button></form><% } %>
+        <% if (acts.has('cancel')) { %><form method="post" action="<%= url('cancel') %>" data-confirm="Hủy phiếu?"><input type="hidden" name="_csrf" value="<%= csrf %>">
+          <div class="input-group input-group-sm"><input name="comment" class="form-control" placeholder="Lý do hủy *" required><button class="btn btn-outline-secondary">Hủy phiếu</button></div></form><% } %>
+      </div></div>
+    <% } %>
+    <div class="card"><div class="card-header">Lịch sử</div><div class="card-body"><ul class="timeline">
+      <% history.slice().reverse().forEach(x => { %><li class="<%= ['reject', 'cancel'].includes(x.action) ? 'reject' : '' %>">
+        <div class="small text-muted"><%= h.date(x.created_at, true) %> · <%= x.full_name %></div>
+        <div class="fw-semibold"><%= ACTION_LABEL[x.action] || x.action %></div>
+        <% if (x.comment) { %><div class="small"><%= x.comment %></div><% } %>
+        <% if (x.to_status && x.to_status !== x.from_status) { %><div class="small text-muted">→ <%= STATUS[x.to_status].label %></div><% } %></li><% }) %>
+    </ul></div></div>
+  </div>
+</div>
+<%- include('../partials/foot') %>

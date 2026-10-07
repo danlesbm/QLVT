@@ -1,0 +1,57 @@
+<%- include('../partials/head') %>
+<div class="row g-3">
+  <div class="<%= groups.length || canGroups ? 'col-xl-9' : 'col-12' %>">
+    <div class="card"><div class="card-body">
+      <form class="row g-2 align-items-end mb-3" method="get">
+        <div class="col-md-3"><label class="form-label small">Phạm vi mã</label>
+          <select name="scope" class="form-select" onchange="this.form.submit()">
+            <option value="">Tất cả</option>
+            <option value="company" <%= query.scope === 'company' ? 'selected' : '' %>>Mã chung toàn công ty</option>
+            <% factories.forEach(f => { %><option value="<%= f.id %>" <%= String(query.scope) === String(f.id) ? 'selected' : '' %>>Mã riêng <%= f.name %></option><% }) %>
+          </select></div>
+        <div class="col-md-5"><label class="form-label small">Tìm kiếm</label><input name="q" class="form-control" value="<%= query.q || '' %>" placeholder="Mã, tên, thông số, hãng..."></div>
+        <% if (query.group) { %><input type="hidden" name="group" value="<%= query.group %>"><% } %>
+        <div class="col-md-4 d-flex gap-2 justify-content-md-end">
+          <button class="btn btn-outline-primary"><i class="bi bi-search"></i> Lọc</button>
+          <% if (canCode) { %><a href="/ma-vat-tu/moi" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Thêm mã</a><% } %>
+        </div>
+      </form>
+      <% if (query.group) { %><div class="mb-2"><span class="badge text-bg-info">Nhóm <%= query.group %></span> <a class="small" href="<%= h.qs(query, { group: '', page: '' }) %>">bỏ lọc nhóm</a></div><% } %>
+      <div class="table-responsive"><table class="table table-sm table-hover">
+        <thead><tr><th>Mã vật tư</th><th>Tên vật tư</th><th>Thông số kỹ thuật</th><th>Hãng SX / Nước SX</th><th>Đơn vị</th><th>Phạm vi</th><th class="text-end">Tổng tồn</th><th></th></tr></thead>
+        <tbody>
+          <% if (!rows.length) { %><tr><td colspan="8" class="text-center text-muted py-4">Không có mã vật tư.</td></tr><% } %>
+          <% rows.forEach(m => { %>
+          <tr class="<%= m.active ? '' : 'text-decoration-line-through text-muted' %>">
+            <td class="text-nowrap fw-semibold"><%= m.code %></td><td><%= m.name %></td><td class="small"><%= m.spec || '' %></td>
+            <td class="small"><%= m.manufacturer || '' %></td><td><%= m.unit || '' %></td>
+            <td class="small"><%= m.factory_name ? 'Riêng ' + m.factory_name : 'Chung' %></td>
+            <td class="text-end"><a href="/kho?q=<%= encodeURIComponent(m.code) %>"><%= h.num(m.total_qty) %></a></td>
+            <td><% if (canCode) { %><a href="/ma-vat-tu/<%= m.id %>/sua" class="btn btn-sm btn-link p-0"><i class="bi bi-pencil"></i></a><% } %></td>
+          </tr>
+          <% }) %>
+        </tbody>
+      </table></div>
+      <%- include('../partials/pager') %>
+    </div></div>
+  </div>
+  <% if (groups.length || canGroups) { %>
+  <div class="col-xl-3">
+    <div class="card"><div class="card-header">Nhóm mã (theo tiền tố)</div>
+      <div class="list-group list-group-flush small">
+        <% groups.forEach(g => { %><a class="list-group-item list-group-item-action" href="<%= h.qs({ group: g.code }) %>"><b><%= g.code %></b> · <%= g.name %></a><% }) %>
+        <% if (!groups.length) { %><div class="list-group-item text-muted">Chưa khai báo nhóm.</div><% } %>
+      </div>
+      <% if (canGroups) { %>
+      <form method="post" action="/ma-vat-tu/nhom" class="card-body border-top">
+        <input type="hidden" name="_csrf" value="<%= csrf %>">
+        <div class="input-group input-group-sm mb-2"><span class="input-group-text">Tiền tố</span><input name="code" class="form-control" placeholder="1-01" required></div>
+        <div class="input-group input-group-sm mb-2"><span class="input-group-text">Tên nhóm</span><input name="name" class="form-control" placeholder="Đồng hồ áp lực" required></div>
+        <button class="btn btn-sm btn-outline-primary w-100">Lưu nhóm</button>
+      </form>
+      <% } %>
+    </div>
+  </div>
+  <% } %>
+</div>
+<%- include('../partials/foot') %>

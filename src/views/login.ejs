@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Đăng nhập · Quản lý vật tư</title>
+  <link rel="stylesheet" href="/vendor/bootstrap/css/bootstrap.min.css">
+  <link rel="stylesheet" href="/vendor/icons/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body class="login-bg d-flex align-items-center justify-content-center p-3">
+  <div class="card shadow-lg" style="width:100%;max-width:<%= people.length ? 640 : 420 %>px">
+    <div class="card-body p-4">
+      <div class="text-center mb-4">
+        <i class="bi bi-box-seam display-5" style="color:var(--brand)"></i>
+        <h1 class="h4 mt-2 mb-0">Phần mềm Quản lý vật tư</h1>
+        <div class="text-muted small">Công ty CP Đầu tư Phát triển Bắc Minh</div>
+      </div>
+      <% if (error) { %><div class="alert alert-danger"><%= error %></div><% } %>
+      <% if (ssoMode === 'oidc') { %>
+        <a href="/auth/sso?next=<%= encodeURIComponent(next) %>" class="btn btn-primary w-100 btn-lg"><i class="bi bi-shield-lock me-2"></i>Đăng nhập bằng tài khoản SSO</a>
+        <p class="text-muted small text-center mt-3 mb-0">Dùng chung tài khoản với các ứng dụng nội bộ khác (Payroll...).</p>
+      <% } else { %>
+        <div class="alert alert-warning small"><i class="bi bi-info-circle me-1"></i>Chế độ <b>SSO giả lập</b> để chạy thử: chọn một cán bộ để đăng nhập. Khi triển khai thật, đặt <code>SSO_MODE=oidc</code>.</div>
+        <form method="post" action="/login">
+          <input type="hidden" name="next" value="<%= next %>">
+          <div class="list-group" style="max-height:420px;overflow:auto">
+            <% people.forEach(p => { %>
+              <button name="sso_id" value="<%= p.id %>" class="list-group-item list-group-item-action d-flex justify-content-between">
+                <span><b><%= p.full_name %></b> <span class="text-muted">(<%= p.username %>)</span></span>
+                <span class="small text-muted"><%= p.position %> · <%= p.department %></span>
+              </button>
+            <% }) %>
+          </div>
+        </form>
+      <% } %>
+    </div>
+  </div>
+</body>
+</html>

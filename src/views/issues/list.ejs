@@ -1,0 +1,30 @@
+<%- include('../partials/head') %>
+<div class="card"><div class="card-body">
+  <form class="row g-2 align-items-end mb-3" method="get">
+    <div class="col-md-3"><select name="factory_id" class="form-select" onchange="this.form.submit()"><option value="">Tất cả kho</option>
+      <% factories.forEach(f => { %><option value="<%= f.id %>" <%= String(query.factory_id) === String(f.id) ? 'selected' : '' %>><%= f.name %></option><% }) %></select></div>
+    <div class="col-md-3"><select name="status" class="form-select" onchange="this.form.submit()"><option value="">Mọi trạng thái</option>
+      <% Object.entries(STATUS).forEach(([k, st]) => { %><option value="<%= k %>" <%= query.status === k ? 'selected' : '' %>><%= st.label %></option><% }) %></select></div>
+    <div class="col-md-3"><input name="q" class="form-control" value="<%= query.q || '' %>" placeholder="Số phiếu, người nhận, lý do..."></div>
+    <div class="col-md-3 d-flex gap-2 justify-content-md-end">
+      <button class="btn btn-outline-primary"><i class="bi bi-search"></i></button>
+      <% if (canCreate) { %><a href="/xuat-kho/moi" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Lập phiếu xuất</a><% } %>
+    </div>
+  </form>
+  <div class="table-responsive"><table class="table table-hover">
+    <thead><tr><th>Số phiếu</th><th>Kho xuất</th><th>Người nhận</th><th>Lý do xuất</th><th class="text-center">Số VT</th><th>Người lập</th><th>Trạng thái</th><th>Cập nhật</th></tr></thead>
+    <tbody>
+      <% if (!rows.length) { %><tr><td colspan="8" class="text-center text-muted py-4">Chưa có phiếu xuất kho.</td></tr><% } %>
+      <% rows.forEach(x => { %>
+        <tr onclick="location.href='/xuat-kho/<%= x.id %>'" style="cursor:pointer">
+          <td class="fw-semibold text-nowrap"><a href="/xuat-kho/<%= x.id %>"><%= x.number || '(nháp)' %></a></td>
+          <td class="small"><%= x.factory_name %></td><td><%= x.receiver_name %></td><td class="small"><%= x.reason || '' %></td>
+          <td class="text-center"><%= x.item_count %></td><td class="small"><%= x.creator_name %></td>
+          <td><%- include('../partials/badge', { st: STATUS[x.status] }) %></td><td class="small text-nowrap"><%= h.date(x.updated_at, true) %></td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table></div>
+  <%- include('../partials/pager') %>
+</div></div>
+<%- include('../partials/foot') %>

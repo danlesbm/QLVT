@@ -1,0 +1,38 @@
+<%- include('../partials/head') %>
+<div class="row g-3">
+  <div class="col-lg-4">
+    <div class="card"><div class="card-body">
+      <div class="small text-muted"><%= row.factory_name %></div>
+      <h2 class="h5"><%= row.code %></h2>
+      <div class="mb-2"><%= row.name %></div>
+      <dl class="row small mb-0">
+        <dt class="col-5">Thông số</dt><dd class="col-7"><%= row.spec || '-' %></dd>
+        <dt class="col-5">Hãng / nước SX</dt><dd class="col-7"><%= row.manufacturer || '-' %></dd>
+        <dt class="col-5">Tồn hiện tại</dt><dd class="col-7 fw-bold"><%= h.num(row.quantity) %> <%= row.unit || '' %></dd>
+        <dt class="col-5">Tình trạng</dt><dd class="col-7"><%= row.condition || '-' %></dd>
+        <dt class="col-5">Vị trí</dt><dd class="col-7"><%= row.location || '-' %></dd>
+        <dt class="col-5">Ghi chú</dt><dd class="col-7"><%= row.note || '-' %></dd>
+      </dl>
+      <% if (can('stock.edit', row.factory_id)) { %><a href="/kho/them?id=<%= row.id %>" class="btn btn-sm btn-primary mt-3"><i class="bi bi-pencil"></i> Cập nhật</a><% } %>
+    </div></div>
+  </div>
+  <div class="col-lg-8">
+    <div class="card"><div class="card-header">Sổ biến động nhập / xuất</div>
+      <div class="table-responsive"><table class="table table-sm mb-0">
+        <thead><tr><th>Thời gian</th><th>Loại</th><th class="text-end">SL</th><th class="text-end">Tồn sau</th><th>Diễn giải</th><th>Người thực hiện</th></tr></thead>
+        <tbody>
+        <% const KIND = { NHAP: 'Nhập', XUAT: 'Xuất', DIEU_CHINH: 'Điều chỉnh', IMPORT: 'Import' }; %>
+        <% moves.forEach(m => { %>
+          <tr><td class="text-nowrap"><%= h.date(m.created_at, true) %></td><td><%= KIND[m.kind] || m.kind %></td>
+            <td class="text-end <%= m.quantity < 0 ? 'text-danger' : 'text-success' %>"><%= m.quantity > 0 ? '+' : '' %><%= h.num(m.quantity) %></td>
+            <td class="text-end"><%= h.num(m.balance) %></td>
+            <td><% if (m.ref_type === 'issue') { %><a href="/xuat-kho/<%= m.ref_id %>"><%= m.note %></a><% } else if (m.ref_type === 'request') { %><a href="/de-xuat/<%= m.ref_id %>"><%= m.note %></a><% } else { %><%= m.note || '' %><% } %></td>
+            <td><%= m.full_name || 'Hệ thống' %></td></tr>
+        <% }) %>
+        <% if (!moves.length) { %><tr><td colspan="6" class="text-muted text-center py-3">Chưa có biến động.</td></tr><% } %>
+        </tbody>
+      </table></div>
+    </div>
+  </div>
+</div>
+<%- include('../partials/foot') %>

@@ -1,0 +1,20 @@
+<%- include('../partials/head') %>
+<%- include('nav') %>
+<div class="card" style="max-width:900px"><div class="card-body">
+  <form method="post" action="/cai-dat/nhom-quyen"><input type="hidden" name="_csrf" value="<%= csrf %>"><input type="hidden" name="id" value="<%= row.id || '' %>">
+    <div class="row g-3 mb-3">
+      <div class="col-md-5"><label class="form-label">Tên nhóm quyền</label><input name="name" class="form-control" value="<%= row.name || '' %>" required></div>
+      <div class="col-md-7"><label class="form-label">Mô tả</label><input name="description" class="form-control" value="<%= row.description || '' %>"></div>
+    </div>
+    <% [...new Set(PERMISSIONS.map(p => p.group))].forEach(g => { %>
+      <h3 class="h6 mt-3"><%= g %></h3>
+      <% PERMISSIONS.filter(p => p.group === g).forEach(p => { %>
+        <div class="form-check"><input class="form-check-input" type="checkbox" name="perms" value="<%= p.code %>" id="<%= p.code %>" <%= perms.has(p.code) ? 'checked' : '' %>>
+          <label class="form-check-label" for="<%= p.code %>"><%= p.label %> <% if (p.scoped) { %><span class="badge text-bg-info fw-normal">theo nhà máy</span><% } %></label></div>
+      <% }) %>
+    <% }) %>
+    <div class="mt-4 d-flex gap-2"><button class="btn btn-primary"><i class="bi bi-save"></i> Lưu</button><a href="/cai-dat/nhom-quyen" class="btn btn-outline-secondary">Hủy</a></div>
+  </form>
+  <% if (row.id) { %><form method="post" action="/cai-dat/nhom-quyen/<%= row.id %>/xoa" class="mt-3" data-confirm="Xóa nhóm quyền này? Người được gán sẽ mất các quyền tương ứng."><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="btn btn-sm btn-outline-danger">Xóa nhóm quyền</button></form><% } %>
+</div></div>
+<%- include('../partials/foot') %>

@@ -1,0 +1,29 @@
+<%- include('../partials/head') %>
+<form method="post" action="<%= row.id ? '/xuat-kho/' + row.id + '/sua' : '/xuat-kho/moi' %>">
+  <input type="hidden" name="_csrf" value="<%= csrf %>">
+  <div class="card mb-3"><div class="card-body"><div class="row g-3">
+    <div class="col-md-4"><label class="form-label">Xuất tại kho <span class="text-danger">*</span></label>
+      <select name="factory_id" class="form-select" <%= row.id ? 'disabled' : '' %> onchange="location.href='/xuat-kho/moi?factory_id='+this.value">
+        <% factories.forEach(f => { %><option value="<%= f.id %>" <%= f.id === row.factory_id ? 'selected' : '' %>><%= f.name %></option><% }) %></select>
+      <% if (row.id) { %><input type="hidden" name="factory_id" value="<%= row.factory_id %>"><% } %></div>
+    <div class="col-md-4"><label class="form-label">Họ tên người nhận hàng <span class="text-danger">*</span></label><input name="receiver_name" class="form-control" value="<%= row.receiver_name || '' %>" required></div>
+    <div class="col-md-4"><label class="form-label">Địa chỉ (bộ phận)</label><input name="receiver_address" class="form-control" value="<%= row.receiver_address || '' %>"></div>
+    <div class="col-md-6"><label class="form-label">Lý do xuất kho</label><input name="reason" class="form-control" value="<%= row.reason || '' %>"></div>
+    <div class="col-md-4"><label class="form-label">Địa điểm</label><input name="location" class="form-control" value="<%= row.location || '' %>"></div>
+    <div class="col-md-2"><label class="form-label">Ngày xuất</label><input name="issue_date" type="date" class="form-control" value="<%= row.issue_date || '' %>"></div>
+  </div></div></div>
+  <div class="card mb-3">
+    <div class="card-header d-flex align-items-center">Vật tư xuất kho<button class="btn btn-sm btn-outline-primary ms-auto" data-add-row="#items"><i class="bi bi-plus-lg"></i> Thêm dòng</button></div>
+    <div class="table-responsive"><table class="table table-sm table-items mb-0" id="items" data-rows="#item-tpl">
+      <thead><tr><th>TT</th><th>Vật tư trong kho (gõ mã hoặc tên)</th><th>ĐVT</th><th class="text-end">Tồn</th><th>SL theo yêu cầu</th><th>SL thực xuất</th><th>Tình trạng</th><th>Ghi chú</th><th></th></tr></thead>
+      <tbody><% items.forEach((it, i) => { %><%- include('item-row', { i, it }) %><% }) %></tbody>
+    </table></div>
+    <template id="item-tpl"><%- include('item-row', { i: '__i__', it: {} }) %></template>
+  </div>
+  <div class="d-flex gap-2">
+    <button class="btn btn-outline-primary" name="then" value="save"><i class="bi bi-save"></i> Lưu nháp</button>
+    <button class="btn btn-primary" name="then" value="submit"><i class="bi bi-send"></i> Lưu và trình GĐ nhà máy</button>
+    <a href="<%= row.id ? '/xuat-kho/' + row.id : '/xuat-kho' %>" class="btn btn-outline-secondary">Hủy</a>
+  </div>
+</form>
+<%- include('../partials/foot') %>

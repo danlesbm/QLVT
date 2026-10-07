@@ -1,0 +1,21 @@
+<%- include('../partials/head') %>
+<div class="card" style="max-width:760px"><div class="card-body">
+  <p>Chọn file <b>Báo cáo tồn kho</b> xuất từ phần mềm đang dùng (các cột <i>STT, Mã hàng, Tên hàng, ĐVT, SL tồn, Giá trị tồn, Kho hàng</i>).</p>
+  <ul class="small text-muted">
+    <li>Mã chưa có sẽ được tạo thành <b>mã chung toàn công ty</b>; đơn vị viết không dấu (CAI, BO...) được chuẩn hóa.</li>
+    <li>Cột <i>Kho hàng</i> được khớp với <i>Mã kho</i> của nhà máy trong Cài đặt (KHOTACO, KHONC3...).</li>
+    <li>Số lượng tồn của các vật tư trong file sẽ được <b>đặt bằng</b> số trong file và ghi vào sổ biến động.</li>
+  </ul>
+  <form method="post" action="/kho/import?_csrf=<%= csrf %>" enctype="multipart/form-data" class="d-flex gap-2" data-confirm="Import sẽ ghi đè số lượng tồn của các vật tư có trong file. Tiếp tục?">
+    <input type="file" name="file" accept=".xlsx" class="form-control" required>
+    <button class="btn btn-primary text-nowrap"><i class="bi bi-upload"></i> Import</button>
+  </form>
+  <% if (result) { %>
+    <div class="alert alert-success mt-3 mb-0">
+      Đã đọc <b><%= h.num(result.total) %></b> dòng: tạo mới <b><%= h.num(result.materials_created) %></b> mã vật tư, cập nhật <b><%= h.num(result.stock_rows) %></b> dòng tồn kho.
+      <% if (result.factories_created.length) { %><div>Tạo kho mới: <%= result.factories_created.join(', ') %> (vào Cài đặt để đặt tên nhà máy).</div><% } %>
+      <% if (result.errors.length) { %><div class="text-danger"><%= result.errors.slice(0, 20).join('; ') %></div><% } %>
+    </div>
+  <% } %>
+</div></div>
+<%- include('../partials/foot') %>

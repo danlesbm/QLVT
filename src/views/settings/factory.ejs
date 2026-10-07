@@ -1,0 +1,25 @@
+<%- include('../partials/head') %>
+<%- include('nav') %>
+<div class="card" style="max-width:900px"><div class="card-body">
+  <form method="post" action="/cai-dat/nha-may"><input type="hidden" name="_csrf" value="<%= csrf %>"><input type="hidden" name="id" value="<%= row.id || '' %>">
+    <div class="row g-3">
+      <div class="col-md-3"><label class="form-label">Mã <span class="text-danger">*</span></label><input name="code" class="form-control" value="<%= row.code || '' %>" required></div>
+      <div class="col-md-6"><label class="form-label">Tên nhà máy <span class="text-danger">*</span></label><input name="name" class="form-control" value="<%= row.name || '' %>" required></div>
+      <div class="col-md-3"><label class="form-label">Thứ tự</label><input name="sort" type="number" class="form-control" value="<%= row.sort || 0 %>"></div>
+      <div class="col-md-3"><label class="form-label">Mã kho (phần mềm cũ)</label><input name="warehouse_code" class="form-control" value="<%= row.warehouse_code || '' %>"></div>
+      <div class="col-md-5"><label class="form-label">Tên kho</label><input name="warehouse_name" class="form-control" value="<%= row.warehouse_name || '' %>"></div>
+      <div class="col-md-4"><label class="form-label">Ký hiệu số phiếu nhu cầu</label><input name="request_prefix" class="form-control" value="<%= row.request_prefix || '' %>" placeholder="PNC-TC&NC3-SBM"><div class="form-text">Số phiếu: 32/<%= row.request_prefix || '...' %></div></div>
+      <div class="col-md-8"><label class="form-label">Địa chỉ / địa điểm</label><input name="address" class="form-control" value="<%= row.address || '' %>"></div>
+      <div class="col-md-4"><label class="form-label">GĐ/PGĐ phụ trách duyệt nhu cầu</label>
+        <select name="director_id" class="form-select"><option value="">-- chưa phân công --</option>
+          <% directors.forEach(d => { %><option value="<%= d.id %>" <%= d.id === row.director_id ? 'selected' : '' %>><%= d.full_name %></option><% }) %></select></div>
+      <div class="col-12"><label class="form-label">Bộ phận (từ SSO) thuộc nhà máy này</label>
+        <div class="row row-cols-md-3 g-1 small">
+          <% departments.forEach(d => { %><div class="form-check"><input class="form-check-input" type="checkbox" name="departments" value="<%= d.id %>" id="d<%= d.id %>" <%= row.id && d.factory_id === row.id ? 'checked' : '' %>><label class="form-check-label" for="d<%= d.id %>"><%= d.name %><% if (d.factory_name && d.factory_id !== row.id) { %> <span class="text-muted">(<%= d.factory_name %>)</span><% } %></label></div><% }) %>
+        </div></div>
+      <div class="col-12"><div class="form-check"><input class="form-check-input" type="checkbox" name="active" value="1" id="ac" <%= row.active ? 'checked' : '' %>><label for="ac" class="form-check-label">Đang hoạt động</label></div></div>
+    </div>
+    <div class="mt-3 d-flex gap-2"><button class="btn btn-primary"><i class="bi bi-save"></i> Lưu</button><a href="/cai-dat" class="btn btn-outline-secondary">Hủy</a></div>
+  </form>
+</div></div>
+<%- include('../partials/foot') %>

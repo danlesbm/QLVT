@@ -1,0 +1,14 @@
+<%- include('../partials/head') %>
+<%- include('nav') %>
+<div class="d-flex mb-2"><p class="text-muted small mb-0 me-auto">Nhóm quyền là tập hợp các quyền chi tiết. Khi gán cho người dùng, chọn phạm vi toàn công ty hoặc từng nhà máy.</p>
+  <a href="/cai-dat/nhom-quyen/moi" class="btn btn-sm btn-primary"><i class="bi bi-plus-lg"></i> Thêm nhóm quyền</a></div>
+<div class="row g-3">
+  <% roles.forEach(r => { %>
+  <div class="col-md-6 col-xl-4"><div class="card h-100"><div class="card-body">
+    <div class="d-flex"><h3 class="h6 me-auto"><%= r.name %></h3><a href="/cai-dat/nhom-quyen/<%= r.id %>"><i class="bi bi-pencil"></i></a></div>
+    <div class="small text-muted mb-2"><%= r.description || '' %> · <%= r.members %> lượt gán</div>
+    <% r.perms.forEach(p => { const d = PERMISSIONS.find(x => x.code === p); if (d) { %><span class="badge text-bg-light border fw-normal mb-1 text-wrap text-start"><%= d.label %></span> <% } }) %>
+  </div></div></div>
+  <% }) %>
+</div>
+<%- include('../partials/foot') %>

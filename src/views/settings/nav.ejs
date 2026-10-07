@@ -1,0 +1,7 @@
+<ul class="nav nav-tabs mb-3">
+  <% if (can('admin.settings')) { %><li class="nav-item"><a class="nav-link <%= path === '/cai-dat' || path === '/cai-dat/' || path.startsWith('/cai-dat/nha-may') ? 'active' : '' %>" href="/cai-dat">Thông tin chung & nhà máy</a></li><% } %>
+  <% if (can('admin.permissions')) { %>
+    <li class="nav-item"><a class="nav-link <%= path.startsWith('/cai-dat/nguoi-dung') ? 'active' : '' %>" href="/cai-dat/nguoi-dung">Người dùng & phân quyền</a></li>
+    <li class="nav-item"><a class="nav-link <%= path.startsWith('/cai-dat/nhom-quyen') ? 'active' : '' %>" href="/cai-dat/nhom-quyen">Nhóm quyền</a></li>
+  <% } %>
+</ul>

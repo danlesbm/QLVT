@@ -1,0 +1,72 @@
+<%- include('partials/head') %>
+<div class="row g-3 mb-3">
+  <% [
+    ['clipboard-check', 'Phiếu đề xuất đang xử lý', stats.inProgress, '#e7f0fa', '#1f4e79', '/de-xuat?status=DANG_XU_LY'],
+    ['hourglass-split', 'Phiếu xuất chờ duyệt', stats.issuesPending, '#fff4e5', '#b26a00', '/xuat-kho?status=CHO_DUYET'],
+    ['upc-scan', 'Mã vật tư', stats.materials, '#eaf6ee', '#1f6b3a', '/ma-vat-tu'],
+    ['boxes', 'Dòng tồn kho còn hàng', stats.stockRows, '#f1ecfb', '#5b3b9a', '/kho?ton=1'],
+  ].forEach(([icon, label, val, bg, fg, href]) => { %>
+  <div class="col-6 col-xl-3">
+    <a href="<%= href %>" class="card h-100 text-decoration-none text-body"><div class="card-body stat">
+      <div class="ico" style="background:<%= bg %>;color:<%= fg %>"><i class="bi bi-<%= icon %>"></i></div>
+      <div><div class="val"><%= h.num(val) %></div><div class="small text-muted"><%= label %></div></div>
+    </div></a>
+  </div>
+  <% }) %>
+</div>
+
+<div class="row g-3">
+  <div class="col-xl-8">
+    <div class="card">
+      <div class="card-header d-flex align-items-center"><i class="bi bi-list-task me-2"></i>Việc cần tôi xử lý
+        <span class="badge text-bg-danger ms-2"><%= reqTodo.length + issueTodo.length %></span></div>
+      <div class="list-group list-group-flush">
+        <% if (!reqTodo.length && !issueTodo.length) { %><div class="list-group-item text-muted py-4 text-center">Không có việc nào đang chờ bạn.</div><% } %>
+        <% reqTodo.forEach(r => { %>
+          <a href="/de-xuat/<%= r.id %>" class="list-group-item list-group-item-action d-flex gap-3 align-items-center">
+            <i class="bi bi-clipboard-check text-primary fs-5"></i>
+            <div class="flex-grow-1 min-w-0">
+              <div class="fw-semibold text-truncate"><%= r.number || 'Nháp' %> · <%= r.title %></div>
+              <div class="small text-muted"><%= r.factory_name %> · <%= r.creator_name %> · cập nhật <%= h.date(r.updated_at, true) %></div>
+            </div>
+            <%- include('partials/badge', { st: RS[r.status] }) %>
+          </a>
+        <% }) %>
+        <% issueTodo.forEach(x => { %>
+          <a href="/xuat-kho/<%= x.id %>" class="list-group-item list-group-item-action d-flex gap-3 align-items-center">
+            <i class="bi bi-box-arrow-up-right text-warning fs-5"></i>
+            <div class="flex-grow-1 min-w-0">
+              <div class="fw-semibold text-truncate"><%= x.number || 'Nháp' %> · Xuất cho <%= x.receiver_name %></div>
+              <div class="small text-muted"><%= x.factory_name %> · <%= x.creator_name %> · <%= x.reason || '' %></div>
+            </div>
+            <%- include('partials/badge', { st: IS[x.status] }) %>
+          </a>
+        <% }) %>
+      </div>
+    </div>
+  </div>
+  <div class="col-xl-4">
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-diagram-3 me-2"></i>Phiếu đề xuất theo trạng thái</div>
+      <ul class="list-group list-group-flush small">
+        <% Object.entries(RS).filter(([k]) => k !== 'NHAP').forEach(([k, st]) => { %>
+          <a class="list-group-item list-group-item-action d-flex justify-content-between" href="/de-xuat?status=<%= k %>">
+            <span><%= st.label %></span><span class="badge text-bg-<%= counts[k] ? st.color : 'light' %>"><%= counts[k] || 0 %></span>
+          </a>
+        <% }) %>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-header"><i class="bi bi-buildings me-2"></i>Các nhà máy</div>
+      <ul class="list-group list-group-flush small">
+        <% factories.forEach(f => { %>
+          <li class="list-group-item d-flex justify-content-between">
+            <a href="/kho?factory_id=<%= f.id %>"><%= f.name %></a>
+            <span class="text-muted"><%= h.num(f.items) %> vật tư · <%= f.open_requests %> phiếu mở</span>
+          </li>
+        <% }) %>
+      </ul>
+    </div>
+  </div>
+</div>
+<%- include('partials/foot') %>

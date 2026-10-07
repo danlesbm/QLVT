@@ -1,0 +1,31 @@
+<%- include('../partials/head') %>
+<% const m = row || {}; %>
+<div class="card" style="max-width:860px"><div class="card-body">
+  <form method="post" action="/ma-vat-tu/luu">
+    <input type="hidden" name="_csrf" value="<%= csrf %>">
+    <input type="hidden" name="id" value="<%= m.id || '' %>">
+    <input type="hidden" name="back" value="<%= back || '' %>">
+    <div class="row g-3">
+      <div class="col-md-6"><label class="form-label">Phạm vi mã <span class="text-danger">*</span></label>
+        <select name="factory_id" class="form-select">
+          <% scopes.forEach(s => { %><option value="<%= s.id %>" <%= String(m.factory_id || '') === String(s.id) ? 'selected' : '' %>><%= s.name %></option><% }) %>
+        </select></div>
+      <div class="col-md-6"><label class="form-label">Gợi ý mã theo nhóm / tiền tố</label>
+        <div class="input-group">
+          <input name="prefix" class="form-control" list="groups" placeholder="vd 1-01-00-00-02-02">
+          <button class="btn btn-outline-secondary" data-suggest-code>Lấy mã tiếp theo</button>
+        </div>
+        <datalist id="groups"><% groups.forEach(g => { %><option value="<%= g.code %>"><%= g.name %></option><% }) %></datalist></div>
+      <div class="col-md-4"><label class="form-label">Mã vật tư <span class="text-danger">*</span></label><input name="code" class="form-control" value="<%= m.code || '' %>" required></div>
+      <div class="col-md-8"><label class="form-label">Tên vật tư <span class="text-danger">*</span></label><input name="name" class="form-control" value="<%= m.name || '' %>" required></div>
+      <div class="col-md-8"><label class="form-label">Thông số kỹ thuật</label><textarea name="spec" class="form-control" rows="2"><%= m.spec || '' %></textarea></div>
+      <div class="col-md-4"><label class="form-label">Đơn vị tính</label><input name="unit" class="form-control" value="<%= m.unit || '' %>" list="units">
+        <datalist id="units"><% ['Cái','Bộ','Chiếc','m','kg','Lít','Cuộn','Đôi','Hộp','Tấm','Bình','Sợi','Viên'].forEach(u => { %><option value="<%= u %>"><% }) %></datalist></div>
+      <div class="col-md-6"><label class="form-label">Hãng sản xuất / Nước sản xuất</label><input name="manufacturer" class="form-control" value="<%= m.manufacturer || '' %>" placeholder="Endress+Hauser / Đức"></div>
+      <div class="col-md-6"><label class="form-label">Ghi chú</label><input name="note" class="form-control" value="<%= m.note || '' %>"></div>
+      <% if (m.id) { %><div class="col-12"><div class="form-check"><input type="hidden" name="active" value="0"><input class="form-check-input" type="checkbox" name="active" value="1" id="act" <%= m.active ? 'checked' : '' %>><label class="form-check-label" for="act">Đang sử dụng</label></div></div><% } %>
+    </div>
+    <div class="mt-4 d-flex gap-2"><button class="btn btn-primary"><i class="bi bi-save"></i> Lưu</button><a href="/ma-vat-tu" class="btn btn-outline-secondary">Hủy</a></div>
+  </form>
+</div></div>
+<%- include('../partials/foot') %>

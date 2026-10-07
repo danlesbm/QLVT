@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title><%= title %> · Quản lý vật tư</title>
+  <link rel="stylesheet" href="/vendor/bootstrap/css/bootstrap.min.css">
+  <link rel="stylesheet" href="/vendor/icons/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="/static/css/app.css">
+  <meta name="csrf-token" content="<%= csrf %>">
+</head>
+<body>
+<%
+  const nav = [
+    { href: '/', icon: 'speedometer2', label: 'Tổng quan', show: true },
+    { href: '/de-xuat', icon: 'clipboard-check', label: 'Đề xuất vật tư', show: true },
+    { href: '/xuat-kho', icon: 'box-arrow-up-right', label: 'Phiếu xuất kho', show: can('issue.view') || can('issue.create') || can('issue.approve') },
+    { href: '/kho', icon: 'boxes', label: 'Tồn kho', show: can('stock.view') },
+    { href: '/ma-vat-tu', icon: 'upc-scan', label: 'Mã vật tư', show: can('catalog.view') },
+    { href: '/cai-dat', icon: 'gear', label: 'Cài đặt & phân quyền', show: can('admin.settings') || can('admin.permissions') },
+  ];
+  const active = (href) => (href === '/' ? path === '/' : path.startsWith(href)) ? 'active' : '';
+%>
+<div class="app">
+  <aside class="sidebar d-none d-lg-flex flex-column">
+    <a href="/" class="brand"><i class="bi bi-box-seam"></i><span>Quản lý vật tư</span></a>
+    <nav class="nav flex-column">
+      <% nav.filter(n => n.show).forEach(n => { %>
+        <a class="nav-link <%= active(n.href) %>" href="<%= n.href %>"><i class="bi bi-<%= n.icon %>"></i><%= n.label %></a>
+      <% }) %>
+    </nav>
+    <div class="mt-auto small text-white-50 px-3 pb-3">Kết nối SSO: <%= ssoMode === 'mock' ? 'giả lập (demo)' : 'SSO công ty' %></div>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <button class="btn btn-sm btn-outline-secondary d-lg-none" data-bs-toggle="offcanvas" data-bs-target="#mnav"><i class="bi bi-list"></i></button>
+      <div class="fw-semibold text-truncate"><%= title %></div>
+      <div class="ms-auto d-flex align-items-center gap-2">
+        <div class="text-end lh-sm d-none d-sm-block">
+          <div class="fw-semibold"><%= user.full_name %><% if (user.is_admin) { %> <span class="badge text-bg-dark">Quản trị</span><% } %></div>
+          <div class="small text-muted"><%= [user.position_name, user.department_name].filter(Boolean).join(' · ') %></div>
+        </div>
+        <form method="post" action="/logout"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="btn btn-sm btn-outline-secondary" title="Đăng xuất"><i class="bi bi-box-arrow-right"></i></button></form>
+      </div>
+    </header>
+    <div class="offcanvas offcanvas-start sidebar-mobile" id="mnav">
+      <div class="offcanvas-body p-0">
+        <nav class="nav flex-column py-2">
+          <% nav.filter(n => n.show).forEach(n => { %>
+            <a class="nav-link <%= active(n.href) %>" href="<%= n.href %>"><i class="bi bi-<%= n.icon %>"></i><%= n.label %></a>
+          <% }) %>
+        </nav>
+      </div>
+    </div>
+    <main class="content">
+      <% if (flash) { %>
+        <div class="alert alert-<%= flash.type %> alert-dismissible fade show" role="alert"><%= flash.message %><button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
+      <% } %>

@@ -1,0 +1,292 @@
+<%- include('../partials/head') %>
+<%
+  const st = STATUS[row.status];
+  const curIdx = FLOW.indexOf(row.status === 'TRA_LAI' ? 'NHAP' : row.status);
+  const url = (a) => `/de-xuat/${row.id}/thao-tac/${a}`;
+  const quoteStage = ['DANG_BAO_GIA', 'DANG_TONG_HOP', 'CHO_GD_DUYET_GIA', 'DANG_MUA_SAM', 'CHO_CHUYEN_HANG', 'CHO_KIEM_TRA_HANG', 'HOAN_THANH'].includes(row.status) || quoters.length;
+  const lineTotal = (it, l) => l && l.unit_price != null ? l.unit_price * it.quantity * (1 + (l.vat_percent || 0) / 100) : null;
+%>
+<div class="card mb-3"><div class="card-body">
+  <div class="d-flex flex-wrap gap-2 align-items-start">
+    <div class="me-auto">
+      <div class="small text-muted"><%= row.factory_name %> · Người lập: <%= row.creator_name %> · Ngày lập <%= h.date(row.created_at) %></div>
+      <h1 class="h4 mb-1"><%= row.number ? 'Số ' + row.number : 'Phiếu nháp' %> · <%= row.title %></h1>
+      <%- include('../partials/badge', { st }) %>
+      <% if (row.director_name && curIdx >= FLOW.indexOf('CHO_DUYET_NHU_CAU')) { %><span class="small text-muted ms-2">GĐ/PGĐ phụ trách: <b><%= row.director_name %></b></span><% } %>
+      <% if (row.reviewer_name) { %><span class="small text-muted ms-2">PKT kiểm soát: <b><%= row.reviewer_name %></b></span><% } %>
+    </div>
+    <div class="d-flex gap-2 no-print">
+      <% if (acts.has('edit') || (acts.has('pkt_edit') && ['CHO_PKT','CHO_TPKT'].includes(row.status))) { %><a href="/de-xuat/<%= row.id %>/sua" class="btn btn-outline-primary"><i class="bi bi-pencil"></i> <%= acts.has('edit') ? 'Sửa phiếu' : 'Điều chỉnh vật tư' %></a><% } %>
+      <% if (row.demand_approved_at && row.status !== 'DA_HUY') { %><a href="/de-xuat/<%= row.id %>/excel" class="btn btn-success"><i class="bi bi-file-earmark-excel"></i> Tải phiếu Excel</a><% } %>
+    </div>
+  </div>
+  <% if (row.status !== 'DA_HUY') { %>
+  <ol class="steps mt-3">
+    <% FLOW.forEach((s, i) => { %><li class="<%= i < curIdx || row.status === 'HOAN_THANH' ? 'done' : i === curIdx ? 'current' : '' %>"><%= STATUS[s].label %></li><% }) %>
+  </ol>
+  <% } %>
+  <% if (row.basis) { %><p class="mt-3 mb-0 text-pre"><%= row.basis %></p><% } %>
+</div></div>
+
+<div class="row g-3">
+  <div class="col-xl-8">
+    <!-- Danh sách vật tư -->
+    <div class="card mb-3">
+      <div class="card-header">Vật tư đề xuất (<%= items.length %>)</div>
+      <div class="table-responsive"><table class="table table-sm mb-0">
+        <thead><tr><th>STT</th><th>Tên vật tư</th><th>Mã hiệu / Nước SX</th><th>Mã thiết bị</th><th>ĐVT</th><th class="text-end">SL</th><th>Thời điểm SD</th><th>Mục đích</th><th>Ghi chú</th>
+          <% if (quoteStage) { %><th>Báo giá</th><% } %>
+          <% if (items.some(i => i.received_qty != null)) { %><th class="text-end">SL nhận</th><th>Tình trạng</th><% } %></tr></thead>
+        <tbody>
+        <% items.forEach(it => { %>
+          <tr>
+            <td><%= it.line_no %></td>
+            <td><%= it.name %><% if (it.material_code) { %><div class="small text-success"><%= it.material_code %></div><% } %><% if (it.spec) { %><div class="small text-muted"><%= it.spec %></div><% } %></td>
+            <td class="small"><%= it.model || '' %></td><td class="small"><%= it.equipment_code || '' %></td><td><%= it.unit || '' %></td>
+            <td class="text-end fw-semibold"><%= h.num(it.quantity) %></td><td class="small"><%= it.use_time || '' %></td><td class="small"><%= it.purpose || '' %></td><td class="small"><%= it.note || '' %></td>
+            <% if (quoteStage) { %><td class="small"><%= it.competitive ? 'Cạnh tranh' : 'Không cần cạnh tranh' %></td><% } %>
+            <% if (items.some(i => i.received_qty != null)) { %><td class="text-end"><%= h.num(it.received_qty) %></td><td class="small"><%= it.received_condition || '' %></td><% } %>
+          </tr>
+        <% }) %>
+        </tbody>
+      </table></div>
+    </div>
+
+    <% if (quoteStage) { %>
+    <!-- Báo giá -->
+    <div class="card mb-3">
+      <div class="card-header d-flex align-items-center"><i class="bi bi-cash-coin me-2"></i>Báo giá cạnh tranh
+        <span class="ms-auto small fw-normal"><%= quoters.filter(q => q.status === 'DA_XONG').length %>/<%= quoters.length %> nhân viên đã hoàn thành</span></div>
+      <div class="card-body">
+        <% if (quoters.length) { %>
+        <div class="d-flex flex-wrap gap-2 mb-3">
+          <% quoters.forEach(q => { %>
+            <span class="badge border text-body bg-<%= q.status === 'DA_XONG' ? 'success-subtle' : 'light' %> p-2">
+              <i class="bi bi-<%= q.status === 'DA_XONG' ? 'check-circle text-success' : 'hourglass-split' %>"></i> <%= q.full_name %>
+              <% if (q.done_note) { %><span class="fw-normal">· <%= q.done_note %></span><% } %>
+            </span>
+          <% }) %>
+        </div>
+        <% } else { %><p class="text-muted">Trưởng phòng Kế hoạch chưa giao nhân viên báo giá.</p><% } %>
+
+        <% if (!unsealed && quoters.length) { %>
+          <div class="alert alert-secondary sealed small"><i class="bi bi-lock-fill"></i> <b>Báo giá đang được niêm phong.</b> Mỗi nhân viên chỉ thấy báo giá của mình. Trưởng phòng Kế hoạch và Giám đốc chỉ xem được khi tất cả nhân viên được giao đã hoàn thành báo giá.</div>
+        <% } %>
+
+        <% if (quotes.length) { %>
+        <div class="table-responsive"><table class="table table-sm table-bordered">
+          <thead><tr><th>Vật tư</th><th class="text-end">SL</th>
+            <% quotes.forEach(q => { %><th class="text-center"><%= q.supplier %><div class="small fw-normal text-muted"><%= q.quoter_name %><%= q.quote_date ? ' · ' + q.quote_date : '' %></div></th><% }) %></tr></thead>
+          <tbody>
+          <% let sums = quotes.map(() => 0); %>
+          <% items.forEach(it => {
+               const totals = quotes.map(q => lineTotal(it, q.byItem[it.id]));
+               const valid = totals.filter(t => t != null);
+               const min = valid.length > 1 ? Math.min(...valid) : null; %>
+            <tr><td><%= it.line_no %>. <%= it.name %></td><td class="text-end"><%= h.num(it.quantity) %></td>
+              <% quotes.forEach((q, qi) => { const l = q.byItem[it.id]; const t = totals[qi]; if (t != null) sums[qi] += t; %>
+                <td class="text-end <%= unsealed && t != null && t === min ? 'best' : '' %> <%= l && selectedLines.has(l.id) ? 'border border-2 border-primary' : '' %>">
+                  <% if (l) { %><div><%= h.money(l.unit_price) %> đ<% if (l.vat_percent) { %> <span class="small text-muted">+VAT <%= l.vat_percent %>%</span><% } %></div>
+                    <div class="small text-muted">TT: <%= h.money(t) %><%= l.brand_origin ? ' · ' + l.brand_origin : '' %></div>
+                    <% if (selectedLines.has(l.id)) { %><span class="badge text-bg-primary">Được chọn</span><% } %>
+                  <% } else { %><span class="text-muted">-</span><% } %>
+                </td>
+              <% }) %></tr>
+          <% }) %>
+          <tr class="fw-bold"><td colspan="2">Tổng (gồm VAT)</td><% sums.forEach(s => { %><td class="text-end"><%= h.money(s) %> đ</td><% }) %></tr>
+          <tr class="small"><td colspan="2">Giao hàng / thanh toán</td><% quotes.forEach(q => { %><td><%= [q.delivery_time, q.payment_terms].filter(Boolean).join(' · ') %>
+            <% if (q.attachment) { %><div><a href="/de-xuat/<%= row.id %>/tep/bao-gia/<%= q.id %>"><i class="bi bi-paperclip"></i> <%= q.attachment_name %></a></div><% } %>
+            <% if (acts.has('quote_delete') && q.quoter_id === user.id) { %>
+              <form method="post" action="<%= url('quote_delete') %>" data-confirm="Xóa báo giá này?"><input type="hidden" name="_csrf" value="<%= csrf %>"><input type="hidden" name="quote_id" value="<%= q.id %>"><button class="btn btn-sm btn-link text-danger p-0">Xóa</button></form>
+            <% } %></td><% }) %></tr>
+          </tbody>
+        </table></div>
+        <% if (unsealed) { %><div class="small text-muted"><span class="best px-2">Ô xanh</span> là giá thấp nhất cho từng vật tư.</div><% } %>
+        <% } %>
+
+        <% if (acts.has('quote_add')) { %>
+        <hr>
+        <h3 class="h6">Nhập báo giá của bạn</h3>
+        <form method="post" action="<%= url('quote_add') %>?_csrf=<%= csrf %>" enctype="multipart/form-data">
+          <div class="row g-2 mb-2">
+            <div class="col-md-5"><input name="supplier" class="form-control form-control-sm" placeholder="Đơn vị báo giá *" required></div>
+            <div class="col-md-4"><input name="contact" class="form-control form-control-sm" placeholder="Người liên hệ / SĐT"></div>
+            <div class="col-md-3"><input name="quote_date" type="date" class="form-control form-control-sm"></div>
+            <div class="col-md-4"><input name="delivery_time" class="form-control form-control-sm" placeholder="Thời gian giao hàng"></div>
+            <div class="col-md-4"><input name="payment_terms" class="form-control form-control-sm" placeholder="Điều kiện thanh toán"></div>
+            <div class="col-md-4"><input name="file" type="file" class="form-control form-control-sm" title="File báo giá (PDF, ảnh...)"></div>
+          </div>
+          <table class="table table-sm"><thead><tr><th>Vật tư</th><th class="text-end">SL</th><th>Đơn giá (đ)</th><th>VAT %</th><th>Hãng / xuất xứ chào</th><th>Ghi chú</th></tr></thead><tbody>
+            <% items.forEach(it => { %><tr><td><%= it.line_no %>. <%= it.name %></td><td class="text-end"><%= h.num(it.quantity) %></td>
+              <td><input name="lines[<%= it.id %>][unit_price]" type="number" step="any" min="0" class="form-control form-control-sm"></td>
+              <td><input name="lines[<%= it.id %>][vat_percent]" type="number" step="any" class="form-control form-control-sm" style="width:70px" value="10"></td>
+              <td><input name="lines[<%= it.id %>][brand_origin]" class="form-control form-control-sm"></td>
+              <td><input name="lines[<%= it.id %>][note]" class="form-control form-control-sm"></td></tr><% }) %>
+          </tbody></table>
+          <input name="note" class="form-control form-control-sm mb-2" placeholder="Ghi chú chung">
+          <button class="btn btn-sm btn-primary"><i class="bi bi-upload"></i> Gửi báo giá</button>
+        </form>
+        <% } %>
+      </div>
+    </div>
+    <% } %>
+
+    <% if (acts.has('comparison_submit') && unsealed) { %>
+    <div class="card mb-3 border-primary">
+      <div class="card-header">Tổng hợp so sánh giá và trình Giám đốc duyệt</div>
+      <div class="card-body">
+        <form method="post" action="<%= url('comparison_submit') %>">
+          <input type="hidden" name="_csrf" value="<%= csrf %>">
+          <table class="table table-sm"><thead><tr><th>Vật tư</th><th>Chọn nhà cung cấp</th></tr></thead><tbody>
+          <% items.forEach(it => { const opts = quotes.filter(q => q.byItem[it.id]).map(q => ({ q, l: q.byItem[it.id], t: lineTotal(it, q.byItem[it.id]) })).sort((a, b) => a.t - b.t); %>
+            <tr><td><%= it.line_no %>. <%= it.name %></td><td>
+              <select name="selected[<%= it.id %>]" class="form-select form-select-sm" required>
+                <% opts.forEach((o, oi) => { %><option value="<%= o.l.id %>" <%= (it.selected_line_id ? it.selected_line_id === o.l.id : oi === 0) ? 'selected' : '' %>><%= o.q.supplier %> - <%= h.money(o.t) %> đ<%= oi === 0 ? ' (thấp nhất)' : '' %></option><% }) %>
+              </select></td></tr>
+          <% }) %>
+          </tbody></table>
+          <div class="row g-2">
+            <div class="col-md-5"><label class="form-label small">Giám đốc duyệt giá</label>
+              <select name="price_approver_id" class="form-select form-select-sm" required>
+                <% directors.forEach(d => { %><option value="<%= d.id %>" <%= d.id === (row.price_approver_id || row.director_id) ? 'selected' : '' %>><%= d.full_name %><%= d.position_name ? ' - ' + d.position_name : '' %></option><% }) %>
+              </select></div>
+            <div class="col-md-7"><label class="form-label small">Nhận xét so sánh / đề xuất</label><input name="comparison_note" class="form-control form-control-sm" value="<%= row.comparison_note || '' %>"></div>
+          </div>
+          <button class="btn btn-primary btn-sm mt-3"><i class="bi bi-send"></i> Trình Giám đốc duyệt giá</button>
+        </form>
+      </div>
+    </div>
+    <% } %>
+
+    <% if (row.comparison_note || row.price_external) { %>
+      <div class="alert alert-<%= row.price_external ? 'warning' : 'light border' %>">
+        <% if (row.price_external) { %><b>Đã duyệt giá ngoài phần mềm:</b><% } else { %><b>Nhận xét so sánh giá:</b><% } %> <%= row.comparison_note %>
+        <% if (row.price_attachment) { %> · <a href="/de-xuat/<%= row.id %>/tep/to-trinh"><i class="bi bi-paperclip"></i> <%= row.price_attachment_name %></a><% } %>
+      </div>
+    <% } %>
+
+    <% if (acts.has('complete')) { %>
+    <div class="card mb-3 border-success">
+      <div class="card-header">Kiểm tra hàng nhận về nhà máy</div>
+      <div class="card-body">
+        <form method="post" action="<%= url('complete') %>" data-confirm="Xác nhận hoàn thành kiểm tra hàng?">
+          <input type="hidden" name="_csrf" value="<%= csrf %>">
+          <table class="table table-sm"><thead><tr><th>Vật tư</th><th class="text-end">SL đề xuất</th><th>SL thực nhận</th><th>Tình trạng</th></tr></thead><tbody>
+          <% items.forEach(it => { %><tr><td><%= it.line_no %>. <%= it.name %><% if (!it.material_id) { %> <span class="badge text-bg-warning">chưa có mã</span><% } %></td><td class="text-end"><%= h.num(it.quantity) %></td>
+            <td><input name="received[<%= it.id %>][qty]" type="number" step="any" min="0" value="<%= it.quantity %>" class="form-control form-control-sm" style="width:100px"></td>
+            <td><input name="received[<%= it.id %>][condition]" class="form-control form-control-sm" placeholder="Đạt / Mới 100%..."></td></tr><% }) %>
+          </tbody></table>
+          <div class="form-check mb-2"><input class="form-check-input" type="checkbox" name="stock_in" value="1" id="si" checked><label class="form-check-label" for="si">Nhập số lượng thực nhận vào kho <%= row.factory_name %> (chỉ vật tư đã có mã)</label></div>
+          <input name="comment" class="form-control form-control-sm mb-2" placeholder="Ghi chú kiểm tra">
+          <button class="btn btn-success btn-sm"><i class="bi bi-check2-all"></i> Kiểm tra xong - Hoàn thành</button>
+        </form>
+      </div>
+    </div>
+    <% } %>
+  </div>
+
+  <div class="col-xl-4">
+    <!-- Bảng xử lý -->
+    <% const flowActs = [...acts].filter(a => !['edit', 'pkt_edit', 'quote_add', 'quote_delete', 'comparison_submit', 'complete'].includes(a)); %>
+    <% if (flowActs.length) { %>
+    <div class="card mb-3 border-primary no-print">
+      <div class="card-header text-bg-primary"><i class="bi bi-lightning-charge"></i> Xử lý phiếu</div>
+      <div class="card-body d-grid gap-3">
+        <% if (acts.has('submit')) { %>
+          <form method="post" action="<%= url('submit') %>"><input type="hidden" name="_csrf" value="<%= csrf %>">
+            <input name="comment" class="form-control form-control-sm mb-2" placeholder="Ghi chú (không bắt buộc)">
+            <button class="btn btn-primary w-100"><i class="bi bi-send"></i> Trình Giám đốc nhà máy</button></form>
+        <% } %>
+        <% for (const [a, icon] of [['factory_approve', 'check2'], ['pkt_check', 'check2-square'], ['director_approve', 'patch-check'], ['purchase_receive', 'inbox'], ['price_approve', 'patch-check'], ['goods_arrived', 'truck'], ['goods_received', 'box-seam']]) { if (!acts.has(a)) continue; %>
+          <form method="post" action="<%= url(a) %>"><input type="hidden" name="_csrf" value="<%= csrf %>">
+            <input name="comment" class="form-control form-control-sm mb-2" placeholder="Ý kiến (không bắt buộc)">
+            <button class="btn btn-success w-100"><i class="bi bi-<%= icon %>"></i> <%= ACTION_LABEL[a] %></button></form>
+        <% } %>
+        <% if (acts.has('pkt_assign')) { %>
+          <form method="post" action="<%= url('pkt_assign') %>"><input type="hidden" name="_csrf" value="<%= csrf %>">
+            <label class="form-label small mb-1">Phân công người kiểm soát vật tư</label>
+            <div class="input-group input-group-sm"><select name="reviewer_id" class="form-select" required>
+              <% reviewers.forEach(u => { %><option value="<%= u.id %>" <%= u.id === row.pkt_reviewer_id ? 'selected' : '' %>><%= u.full_name %></option><% }) %></select>
+              <button class="btn btn-outline-primary">Giao</button></div></form>
+        <% } %>
+        <% if (acts.has('pkt_approve')) { %>
+          <form method="post" action="<%= url('pkt_approve') %>"><input type="hidden" name="_csrf" value="<%= csrf %>">
+            <label class="form-label small mb-1">Trình Giám đốc / Phó giám đốc phụ trách</label>
+            <select name="director_id" class="form-select form-select-sm mb-2" required>
+              <% directors.forEach(d => { %><option value="<%= d.id %>" <%= d.id === (row.director_id || defaultDirector) ? 'selected' : '' %>><%= d.full_name %><%= d.position_name ? ' - ' + d.position_name : '' %></option><% }) %></select>
+            <input name="comment" class="form-control form-control-sm mb-2" placeholder="Ý kiến (không bắt buộc)">
+            <button class="btn btn-success w-100"><i class="bi bi-check2"></i> <%= ACTION_LABEL.pkt_approve %></button></form>
+        <% } %>
+        <% if (acts.has('assign_quoters')) { %>
+          <form method="post" action="<%= url('assign_quoters') %>"><input type="hidden" name="_csrf" value="<%= csrf %>">
+            <label class="form-label small mb-1">Giao nhân viên báo giá (tối đa <%= maxQuoters %>, mỗi người 1 báo giá độc lập)</label>
+            <% staff.forEach(u => { %><div class="form-check"><input class="form-check-input" type="checkbox" name="quoter_ids" value="<%= u.id %>" id="q<%= u.id %>" <%= quoters.some(q => q.user_id === u.id) ? 'checked' : '' %>><label class="form-check-label" for="q<%= u.id %>"><%= u.full_name %></label></div><% }) %>
+            <label class="form-label small mt-2 mb-1">Vật tư <b>không cần</b> báo giá cạnh tranh</label>
+            <% items.forEach(it => { %><div class="form-check small"><input class="form-check-input" type="checkbox" name="non_competitive" value="<%= it.id %>" id="nc<%= it.id %>" <%= it.competitive ? '' : 'checked' %>><label class="form-check-label" for="nc<%= it.id %>"><%= it.line_no %>. <%= it.name %></label></div><% }) %>
+            <button class="btn btn-primary w-100 mt-2"><i class="bi bi-people"></i> Lưu phân công báo giá</button></form>
+        <% } %>
+        <% if (acts.has('quote_done')) { %>
+          <form method="post" action="<%= url('quote_done') %>" data-confirm="Sau khi hoàn thành bạn không sửa được báo giá. Tiếp tục?"><input type="hidden" name="_csrf" value="<%= csrf %>">
+            <input name="comment" class="form-control form-control-sm mb-2" placeholder="vd: Không lấy được thêm báo giá">
+            <button class="btn btn-success w-100"><i class="bi bi-check2-circle"></i> Hoàn thành báo giá của tôi</button></form>
+        <% } %>
+        <% if (acts.has('assign_compiler') && unsealed) { %>
+          <form method="post" action="<%= url('assign_compiler') %>"><input type="hidden" name="_csrf" value="<%= csrf %>">
+            <label class="form-label small mb-1">Giao nhân viên tổng hợp so sánh giá</label>
+            <div class="input-group input-group-sm"><select name="compiler_id" class="form-select">
+              <% quoters.forEach(q => { %><option value="<%= q.user_id %>" <%= q.user_id === row.compiler_id ? 'selected' : '' %>><%= q.full_name %></option><% }) %></select>
+              <button class="btn btn-primary">Giao</button></div></form>
+        <% } %>
+        <% if (acts.has('quote_reopen')) { %>
+          <form method="post" action="<%= url('quote_reopen') %>"><input type="hidden" name="_csrf" value="<%= csrf %>">
+            <label class="form-label small mb-1">Yêu cầu báo giá lại</label>
+            <select name="user_id" class="form-select form-select-sm mb-1"><% quoters.forEach(q => { %><option value="<%= q.user_id %>"><%= q.full_name %></option><% }) %></select>
+            <div class="input-group input-group-sm"><input name="comment" class="form-control" placeholder="Lý do *" required><button class="btn btn-outline-warning">Gửi</button></div></form>
+        <% } %>
+        <% if (acts.has('price_external')) { %>
+          <form method="post" action="<%= url('price_external') %>?_csrf=<%= csrf %>" enctype="multipart/form-data">
+            <label class="form-label small mb-1">Đã trình duyệt giá ngoài phần mềm</label>
+            <input name="comment" class="form-control form-control-sm mb-1" placeholder="Số tờ trình, ngày duyệt... *" required>
+            <input name="file" type="file" class="form-control form-control-sm mb-2">
+            <button class="btn btn-outline-primary w-100 btn-sm">Ghi nhận và chuyển sang Đang mua sắm</button></form>
+        <% } %>
+        <% if (acts.has('reject')) { %>
+          <form method="post" action="<%= url('reject') %>" data-confirm="Xác nhận từ chối phiếu?"><input type="hidden" name="_csrf" value="<%= csrf %>">
+            <textarea name="comment" class="form-control form-control-sm mb-2" rows="2" placeholder="Lý do từ chối *" required></textarea>
+            <button class="btn btn-outline-danger w-100"><i class="bi bi-x-circle"></i> Từ chối<%= REJECT_TO[row.status] === 'TRA_LAI' ? ' (trả về người lập)' : ' (trả về ' + STATUS[REJECT_TO[row.status]].label.toLowerCase() + ')' %></button></form>
+        <% } %>
+        <% if (acts.has('cancel')) { %>
+          <form method="post" action="<%= url('cancel') %>" data-confirm="Hủy phiếu? Thao tác không thể hoàn tác."><input type="hidden" name="_csrf" value="<%= csrf %>">
+            <div class="input-group input-group-sm"><input name="comment" class="form-control" placeholder="Lý do hủy *" required><button class="btn btn-outline-secondary">Hủy phiếu</button></div></form>
+        <% } %>
+      </div>
+    </div>
+    <% } %>
+
+    <!-- Thành phần ký -->
+    <div class="card mb-3"><div class="card-header">Thành phần ký trên phiếu</div>
+      <ul class="list-group list-group-flush small">
+        <% [['Người lập', row.creator_name], ['Giám đốc nhà máy', row.factory_approver_name], ['Phòng Kỹ thuật kiểm tra', row.pkt_checker_name], ['TP Kỹ thuật duyệt lần 1', row.pkt_approver_name], ['Giám đốc / PGĐ duyệt', row.director_approver_name]].forEach(([k, v]) => { %>
+          <li class="list-group-item d-flex justify-content-between"><span class="text-muted"><%= k %></span><span class="fw-semibold"><%= v || '-' %></span></li>
+        <% }) %>
+      </ul>
+    </div>
+
+    <!-- Lịch sử -->
+    <div class="card"><div class="card-header">Lịch sử duyệt / từ chối</div>
+      <div class="card-body">
+        <ul class="timeline">
+          <% history.slice().reverse().forEach(x => { %>
+            <li class="<%= x.action === 'reject' || x.action === 'cancel' ? 'reject' : '' %>">
+              <div class="small text-muted"><%= h.date(x.created_at, true) %> · <%= x.full_name %></div>
+              <div class="<%= x.action === 'reject' ? 'text-danger fw-semibold' : 'fw-semibold' %>"><%= ACTION_LABEL[x.action] || (x.action === 'quotes_unsealed' ? 'Mở niêm phong báo giá' : x.action) %></div>
+              <% if (x.comment) { %><div class="small text-pre"><%= x.action === 'reject' ? 'Lý do: ' : '' %><%= x.comment %></div><% } %>
+              <% if (x.to_status && x.to_status !== x.from_status) { %><div class="small text-muted">→ <%= STATUS[x.to_status].label %></div><% } %>
+            </li>
+          <% }) %>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+<%- include('../partials/foot') %>

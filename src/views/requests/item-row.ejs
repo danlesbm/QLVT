@@ -1,0 +1,17 @@
+<tr>
+  <td class="row-no text-muted"><%= typeof i === 'number' ? i + 1 : '' %></td>
+  <td class="w-name">
+    <div><input name="items[<%= i %>][name]" data-f="name" data-ac class="form-control form-control-sm" value="<%= it.name || '' %>" autocomplete="off"></div>
+    <input type="hidden" name="items[<%= i %>][material_id]" data-f="material_id" value="<%= it.material_id || '' %>">
+    <span class="small text-success" data-f="material_code"><%= it.material_code || '' %></span>
+  </td>
+  <td><input name="items[<%= i %>][model]" data-f="model" class="form-control form-control-sm" value="<%= it.model || '' %>"></td>
+  <td><input name="items[<%= i %>][spec]" data-f="spec" class="form-control form-control-sm" value="<%= it.spec || '' %>"></td>
+  <td><input name="items[<%= i %>][equipment_code]" class="form-control form-control-sm" value="<%= it.equipment_code || '' %>" style="width:90px"></td>
+  <td><input name="items[<%= i %>][unit]" data-f="unit" class="form-control form-control-sm" value="<%= it.unit || '' %>" style="width:70px"></td>
+  <td><input name="items[<%= i %>][quantity]" type="number" step="any" min="0" class="form-control form-control-sm" value="<%= it.quantity ?? '' %>" style="width:85px"></td>
+  <td><input name="items[<%= i %>][use_time]" class="form-control form-control-sm" value="<%= it.use_time || '' %>" placeholder="10-2026" style="width:90px"></td>
+  <td><input name="items[<%= i %>][purpose]" class="form-control form-control-sm" value="<%= it.purpose || '' %>"></td>
+  <td><input name="items[<%= i %>][note]" class="form-control form-control-sm" value="<%= it.note || '' %>"></td>
+  <td><button class="btn btn-sm btn-link text-danger p-0" data-del-row title="Xóa dòng"><i class="bi bi-x-lg"></i></button></td>
+</tr>

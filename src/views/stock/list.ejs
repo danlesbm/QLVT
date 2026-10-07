@@ -1,0 +1,49 @@
+<%- include('../partials/head') %>
+<div class="card">
+  <div class="card-body">
+    <form class="row g-2 align-items-end mb-3" method="get">
+      <div class="col-md-3"><label class="form-label small">Kho / nhà máy</label>
+        <select name="factory_id" class="form-select" onchange="this.form.submit()">
+          <option value="">Tất cả kho</option>
+          <% factories.forEach(f => { %><option value="<%= f.id %>" <%= String(query.factory_id) === String(f.id) ? 'selected' : '' %>><%= f.name %></option><% }) %>
+        </select></div>
+      <div class="col-md-4"><label class="form-label small">Tìm kiếm</label>
+        <input name="q" value="<%= query.q || '' %>" class="form-control" placeholder="Mã, tên, thông số, hãng sản xuất..."></div>
+      <div class="col-md-2"><div class="form-check mb-2"><input class="form-check-input" type="checkbox" name="ton" value="1" id="ton" <%= query.ton === '1' ? 'checked' : '' %>><label class="form-check-label" for="ton">Chỉ còn tồn</label></div></div>
+      <div class="col-md-3 d-flex gap-2 justify-content-md-end flex-wrap">
+        <button class="btn btn-outline-primary"><i class="bi bi-search"></i> Lọc</button>
+        <a class="btn btn-outline-success" href="/kho/xuat-excel<%= h.qs(query, { page: '' }) %>"><i class="bi bi-file-earmark-excel"></i> Excel</a>
+        <% if (editable.length) { %><a class="btn btn-primary" href="/kho/them<%= h.qs({ factory_id: query.factory_id }) %>"><i class="bi bi-plus-lg"></i> Nhập vật tư</a><% } %>
+        <% if (can('stock.import')) { %><a class="btn btn-outline-secondary" href="/kho/import" title="Import từ Excel"><i class="bi bi-upload"></i></a><% } %>
+      </div>
+    </form>
+    <div class="table-responsive">
+      <table class="table table-sm table-hover align-middle">
+        <thead><tr>
+          <th>STT</th><th>Mã vật tư</th><th>Tên vật tư</th><th>Thông số kỹ thuật</th><th>Hãng SX / Nước SX</th>
+          <th>Đơn vị</th><th class="text-end">Số lượng</th><th>Tình trạng</th><th>Ghi chú</th><th>Kho</th><th></th>
+        </tr></thead>
+        <tbody>
+        <% if (!rows.length) { %><tr><td colspan="11" class="text-center text-muted py-4">Không có vật tư nào.</td></tr><% } %>
+        <% rows.forEach((r, i) => { %>
+          <tr>
+            <td class="text-muted"><%= (page - 1) * 50 + i + 1 %></td>
+            <td class="text-nowrap"><a href="/kho/<%= r.id %>"><%= r.code %></a></td>
+            <td><%= r.name %></td>
+            <td class="small"><%= r.spec || '' %></td>
+            <td class="small"><%= r.manufacturer || '' %></td>
+            <td><%= r.unit || '' %></td>
+            <td class="text-end fw-semibold <%= r.quantity <= 0 ? 'text-danger' : '' %>"><%= h.num(r.quantity) %></td>
+            <td class="small"><%= r.condition || '' %></td>
+            <td class="small"><%= r.note || '' %></td>
+            <td class="small text-nowrap"><%= r.factory_name %></td>
+            <td class="text-nowrap"><% if (can('stock.edit', r.factory_id)) { %><a href="/kho/them?id=<%= r.id %>" class="btn btn-sm btn-link p-0" title="Cập nhật"><i class="bi bi-pencil"></i></a><% } %></td>
+          </tr>
+        <% }) %>
+        </tbody>
+      </table>
+    </div>
+    <%- include('../partials/pager') %>
+  </div>
+</div>
+<%- include('../partials/foot') %>

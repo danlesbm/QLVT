@@ -1,0 +1,36 @@
+<%- include('../partials/head') %>
+<%- include('nav') %>
+<% if (!can('admin.settings')) { %><p class="text-muted">Chọn mục Người dùng & phân quyền.</p><% } else { %>
+<div class="row g-3">
+  <div class="col-xl-7">
+    <div class="card mb-3"><div class="card-header d-flex align-items-center">Nhà máy / kho <a href="/cai-dat/nha-may/moi" class="btn btn-sm btn-outline-primary ms-auto"><i class="bi bi-plus-lg"></i> Thêm</a></div>
+      <div class="table-responsive"><table class="table table-sm mb-0">
+        <thead><tr><th>Mã</th><th>Tên nhà máy</th><th>Mã kho cũ</th><th>Ký hiệu số phiếu</th><th>GĐ/PGĐ phụ trách</th><th></th></tr></thead>
+        <tbody><% factories.forEach(f => { %><tr class="<%= f.active ? '' : 'text-muted' %>"><td><%= f.code %></td><td><%= f.name %></td><td><%= f.warehouse_code || '' %></td><td class="small">.../<%= f.request_prefix || '' %></td><td class="small"><%= f.director_name || '-' %></td>
+          <td><a href="/cai-dat/nha-may/<%= f.id %>"><i class="bi bi-pencil"></i></a></td></tr><% }) %></tbody>
+      </table></div>
+    </div>
+    <div class="card"><div class="card-header">Đồng bộ SSO</div><div class="card-body">
+      <p class="mb-2">Danh sách cán bộ công nhân viên, bộ phận, chức vụ lấy từ SSO (<b><%= ssoMode === 'mock' ? 'giả lập' : 'SSO công ty' %></b>):
+        <%= counts.users %> CBCNV · <%= counts.departments %> bộ phận · <%= counts.positions %> chức vụ.</p>
+      <p class="small text-muted">Lần đồng bộ gần nhất: <%= settings.sso_last_sync || 'chưa' %>. Hệ thống tự đồng bộ định kỳ.</p>
+      <form method="post" action="/cai-dat/dong-bo-sso"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="btn btn-outline-primary"><i class="bi bi-arrow-repeat"></i> Đồng bộ ngay</button></form>
+    </div></div>
+  </div>
+  <div class="col-xl-5">
+    <div class="card"><div class="card-header">Thông tin công ty (in trên phiếu)</div><div class="card-body">
+      <form method="post" action="/cai-dat/chung"><input type="hidden" name="_csrf" value="<%= csrf %>">
+        <% SETTING_KEYS.forEach(([k, l]) => { %><div class="mb-2"><label class="form-label small mb-0"><%= l %></label><input name="<%= k %>" class="form-control form-control-sm" value="<%= settings[k] || '' %>"></div><% }) %>
+        <div class="mb-2"><label class="form-label small mb-0">Người ký mục "Phòng Kỹ thuật - Kiểm tra" trên phiếu nhu cầu</label>
+          <select name="pkt_signer" class="form-select form-select-sm">
+            <option value="reviewer" <%= settings.pkt_signer !== 'head' ? 'selected' : '' %>>Cán bộ PKT được giao kiểm soát (nếu không giao thì TP Kỹ thuật)</option>
+            <option value="head" <%= settings.pkt_signer === 'head' ? 'selected' : '' %>>Trưởng phòng Kỹ thuật</option>
+          </select></div>
+        <div class="mb-3"><label class="form-label small mb-0">Số nhân viên báo giá tối đa mỗi phiếu</label><input name="max_quoters" type="number" min="1" max="10" class="form-control form-control-sm" value="<%= settings.max_quoters || 3 %>"></div>
+        <button class="btn btn-primary btn-sm"><i class="bi bi-save"></i> Lưu</button>
+      </form>
+    </div></div>
+  </div>
+</div>
+<% } %>
+<%- include('../partials/foot') %>

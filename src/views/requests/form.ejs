@@ -1,0 +1,47 @@
+<%- include('../partials/head') %>
+<form method="post" action="<%= row.id ? '/de-xuat/' + row.id + '/sua' : '/de-xuat/moi' %>">
+  <input type="hidden" name="_csrf" value="<%= csrf %>">
+  <div class="card mb-3"><div class="card-body">
+    <% if (pktMode) { %>
+      <div class="alert alert-info small mb-3"><i class="bi bi-info-circle"></i> Phòng Kỹ thuật đang điều chỉnh danh sách vật tư. Mọi thay đổi được ghi vào lịch sử phiếu.</div>
+      <input type="hidden" name="factory_id" value="<%= row.factory_id %>">
+      <h2 class="h6"><%= row.number %> · <%= row.title %></h2>
+      <div class="col-md-8"><label class="form-label">Nội dung điều chỉnh</label><input name="comment" class="form-control" placeholder="vd: Giảm số lượng dầu tua bin do tồn kho còn đủ"></div>
+    <% } else { %>
+    <div class="row g-3">
+      <div class="col-md-4"><label class="form-label">Nhà máy / bộ phận đề xuất <span class="text-danger">*</span></label>
+        <select name="factory_id" class="form-select" <%= row.id ? 'disabled' : '' %>>
+          <% factories.forEach(f => { %><option value="<%= f.id %>" <%= f.id === row.factory_id ? 'selected' : '' %>><%= f.name %></option><% }) %>
+        </select>
+        <% if (row.id) { %><input type="hidden" name="factory_id" value="<%= row.factory_id %>"><% } %>
+      </div>
+      <div class="col-md-8"><label class="form-label">Tiêu đề <span class="text-danger">*</span></label><input name="title" class="form-control" value="<%= row.title || '' %>" required></div>
+      <div class="col-12"><label class="form-label">Căn cứ / nội dung đề xuất</label><textarea name="basis" class="form-control" rows="2"><%= row.basis || '' %></textarea></div>
+    </div>
+    <% } %>
+  </div></div>
+
+  <div class="card mb-3">
+    <div class="card-header d-flex align-items-center">Danh sách vật tư đề xuất
+      <button class="btn btn-sm btn-outline-primary ms-auto" data-add-row="#items"><i class="bi bi-plus-lg"></i> Thêm dòng</button></div>
+    <div class="table-responsive">
+      <table class="table table-sm table-items mb-0" id="items" data-rows="#item-tpl">
+        <thead><tr><th>STT</th><th>Tên vật tư (gõ để tìm mã)</th><th>Mã hiệu / Nước SX</th><th>Thông số kỹ thuật</th><th>Mã thiết bị</th><th>ĐVT</th><th>Số lượng</th><th>Thời điểm SD</th><th>Mục đích sử dụng</th><th>Ghi chú</th><th></th></tr></thead>
+        <tbody>
+          <% items.forEach((it, i) => { %>
+            <%- include('item-row', { i, it }) %>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+    <template id="item-tpl"><%- include('item-row', { i: '__i__', it: {} }) %></template>
+    <div class="card-footer small text-muted">Chọn vật tư từ gợi ý để gắn mã (khi hoàn thành, vật tư có mã sẽ được nhập kho tự động). Vật tư mới chưa có mã vẫn có thể đề xuất.</div>
+  </div>
+
+  <div class="d-flex gap-2">
+    <button class="btn btn-outline-primary" name="then" value="save"><i class="bi bi-save"></i> Lưu</button>
+    <% if (!pktMode) { %><button class="btn btn-primary" name="then" value="submit"><i class="bi bi-send"></i> Lưu và trình Giám đốc nhà máy</button><% } %>
+    <a href="<%= row.id ? '/de-xuat/' + row.id : '/de-xuat' %>" class="btn btn-outline-secondary">Hủy</a>
+  </div>
+</form>
+<%- include('../partials/foot') %>
