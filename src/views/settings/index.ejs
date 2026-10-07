@@ -1,19 +1,48 @@
 <%- include('../partials/head') %>
 <%- include('nav') %>
-<% if (!can('admin.settings')) { %><p class="text-muted">Chọn mục Người dùng & phân quyền.</p><% } else { %>
+<% if (!can('admin.settings')) { %>
+<div class="card" style="max-width:720px"><div class="card-header">Nhân sự các kho</div>
+  <div class="list-group list-group-flush">
+    <% units.filter(x => x.factory_active).forEach(x => { %><a class="list-group-item list-group-item-action" href="/cai-dat/nha-may/<%= x.factory_id %>#nhan-su"><%= x.name %> <span class="text-muted small">· <%= x.people %> người</span></a><% }) %>
+    <% if (!units.some(x => x.factory_active)) { %><div class="list-group-item text-muted">Chưa có đơn vị nào có kho.</div><% } %>
+  </div>
+</div>
+<% } else { %>
 <div class="row g-3">
   <div class="col-xl-7">
-    <div class="card mb-3"><div class="card-header d-flex align-items-center">Nhà máy / kho <a href="/cai-dat/nha-may/moi" class="btn btn-sm btn-outline-primary ms-auto"><i class="bi bi-plus-lg"></i> Thêm</a></div>
-      <div class="table-responsive"><table class="table table-sm mb-0">
-        <thead><tr><th>Mã</th><th>Tên nhà máy</th><th>Mã kho cũ</th><th>Ký hiệu số phiếu</th><th>GĐ/PGĐ phụ trách</th><th></th></tr></thead>
-        <tbody><% factories.forEach(f => { %><tr class="<%= f.active ? '' : 'text-muted' %>"><td><%= f.code %></td><td><%= f.name %></td><td><%= f.warehouse_code || '' %></td><td class="small">.../<%= f.request_prefix || '' %></td><td class="small"><%= f.director_name || '-' %></td>
-          <td><a href="/cai-dat/nha-may/<%= f.id %>"><i class="bi bi-pencil"></i></a></td></tr><% }) %></tbody>
-      </table></div>
+    <div class="card mb-3"><div class="card-header">Đơn vị có kho</div>
+      <div class="card-body pb-0"><p class="small text-muted mb-2">Phòng ban, nhà máy lấy từ SSO. Tích đơn vị nào có kho vật tư: tên kho theo tên đơn vị trên SSO, thủ kho / GĐ nhà máy / người tổng hợp đề xuất chỉ chọn được trong nhân sự của đơn vị đó. Các phòng ban khác dùng để phân quyền duyệt, kiểm soát, mua sắm, đánh mã hoặc xem vật tư.</p></div>
+      <form method="post" action="/cai-dat/don-vi-co-kho" data-confirm="Lưu danh sách đơn vị có kho? Bỏ tích một đơn vị sẽ ngưng hoạt động kho của đơn vị đó (dữ liệu vẫn giữ, tích lại là dùng tiếp).">
+        <input type="hidden" name="_csrf" value="<%= csrf %>">
+        <input type="hidden" name="shown" value="<%= units.map(x => x.id).join(',') %>">
+        <div class="table-responsive"><table class="table table-sm align-middle mb-0">
+          <thead><tr><th>Đơn vị (SSO)</th><th class="text-end">Nhân sự</th><th class="text-center">Có kho</th><th>Mã kho</th><th>Ký hiệu số phiếu</th><th>GĐ/PGĐ phụ trách</th><th></th></tr></thead>
+          <tbody>
+            <% if (!units.length) { %><tr><td colspan="7" class="text-muted text-center py-3">Chưa có dữ liệu từ SSO: bấm "Đồng bộ ngay".</td></tr><% } %>
+            <% units.forEach(x => { const on = !!x.factory_active; %><tr class="<%= on ? '' : 'text-muted' %>">
+              <td><label for="k<%= x.id %>" class="<%= on ? 'fw-semibold' : '' %>"><%= x.name %></label><% if (!x.active) { %> <span class="badge text-bg-warning">không còn trên SSO</span><% } %></td>
+              <td class="text-end small"><%= x.people %></td>
+              <td class="text-center"><input class="form-check-input" type="checkbox" name="kho" value="<%= x.id %>" id="k<%= x.id %>" <%= on ? 'checked' : '' %>></td>
+              <td class="small"><% if (x.factory_id) { %><%= x.code %><% if (x.warehouse_code) { %> <span class="text-muted">(<%= x.warehouse_code %>)</span><% } %><% } %></td>
+              <td class="small"><%= on && x.request_prefix ? '.../' + x.request_prefix : '' %></td>
+              <td class="small"><%= on ? (x.director_name || '-') : '' %></td>
+              <td><% if (x.factory_id) { %><a href="/cai-dat/nha-may/<%= x.factory_id %>" title="Sửa kho, nhân sự kho"><i class="bi bi-pencil"></i></a><% } %></td>
+            </tr><% }) %>
+          </tbody>
+        </table></div>
+        <div class="card-body"><button class="btn btn-primary btn-sm"><i class="bi bi-save"></i> Lưu đơn vị có kho</button></div>
+      </form>
     </div>
+    <% if (unlinked.length) { %>
+    <div class="card mb-3 border-warning"><div class="card-header">Kho chưa gắn đơn vị SSO</div>
+      <div class="card-body"><p class="small mb-2">Các kho này tạo từ bản trước, tên không khớp đơn vị nào trên SSO. Mở kho để chọn đơn vị SSO tương ứng, hoặc bỏ "Đang hoạt động" nếu không dùng.</p>
+        <ul class="mb-0"><% unlinked.forEach(f => { %><li class="<%= f.active ? '' : 'text-muted' %>"><a href="/cai-dat/nha-may/<%= f.id %>"><%= f.name %></a> (<%= f.code %><%= f.warehouse_code ? ', mã kho cũ ' + f.warehouse_code : '' %>)<%= f.active ? '' : ' · ngưng hoạt động' %></li><% }) %></ul>
+      </div></div>
+    <% } %>
     <div class="card"><div class="card-header">Đồng bộ SSO</div><div class="card-body">
-      <p class="mb-2">Danh sách cán bộ công nhân viên, bộ phận, chức vụ lấy từ SSO (<b><%= ssoMode === 'mock' ? 'giả lập' : 'SSO công ty' %></b>):
-        <%= counts.users %> CBCNV · <%= counts.departments %> bộ phận · <%= counts.positions %> chức vụ.</p>
-      <p class="small text-muted">Lần đồng bộ gần nhất: <%= settings.sso_last_sync || 'chưa' %>. Hệ thống tự đồng bộ định kỳ.</p>
+      <p class="mb-2">Danh sách cán bộ công nhân viên, phòng ban / nhà máy, chức vụ lấy từ SSO (<b><%= ssoMode === 'mock' ? 'giả lập' : 'SSO Portal công ty' %></b>):
+        <%= counts.users %> CBCNV · <%= counts.departments %> phòng ban / nhà máy · <%= counts.positions %> chức vụ.</p>
+      <p class="small text-muted">Lần đồng bộ gần nhất: <%= settings.sso_last_sync || 'chưa' %>. Hệ thống tự đồng bộ định kỳ và khi SSO báo có thay đổi.</p>
       <form method="post" action="/cai-dat/dong-bo-sso"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="btn btn-outline-primary"><i class="bi bi-arrow-repeat"></i> Đồng bộ ngay</button></form>
     </div></div>
   </div>

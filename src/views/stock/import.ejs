@@ -13,7 +13,6 @@
   <% if (result) { %>
     <div class="alert alert-success mt-3 mb-0">
       Đã đọc <b><%= h.num(result.total) %></b> dòng: tạo mới <b><%= h.num(result.materials_created) %></b> mã vật tư, cập nhật <b><%= h.num(result.stock_rows) %></b> dòng tồn kho.
-      <% if (result.factories_created.length) { %><div>Tạo kho mới: <%= result.factories_created.join(', ') %> (vào Cài đặt để đặt tên nhà máy).</div><% } %>
       <% if (result.errors.length) { %><div class="text-danger"><%= result.errors.slice(0, 20).join('; ') %></div><% } %>
     </div>
   <% } %>

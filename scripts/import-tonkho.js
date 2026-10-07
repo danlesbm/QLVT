@@ -17,7 +17,6 @@ const imp = require('../src/services/import-tonkho');
   const rows = await imp.parse(fs.readFileSync(file));
   const res = imp.apply(db, null, rows);
   console.log(`Đọc ${rows.length} dòng. Tạo mới ${res.materials_created} mã vật tư, cập nhật ${res.stock_rows} dòng tồn kho.`);
-  if (res.factories_created.length) console.log('Kho mới:', res.factories_created.join(', '));
   if (res.errors.length) console.log(res.errors.join('\n'));
 })().catch((err) => {
   console.error(`Không import được: ${err.message}`);

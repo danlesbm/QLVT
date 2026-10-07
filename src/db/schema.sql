@@ -6,27 +6,29 @@ CREATE TABLE IF NOT EXISTS settings (
   value TEXT
 );
 
--- ===== Danh mục nhà máy / kho =====
+-- ===== Kho: mỗi kho thuộc một đơn vị SSO được tích "có kho" =====
 CREATE TABLE IF NOT EXISTS factories (
   id               INTEGER PRIMARY KEY,
   code             TEXT NOT NULL UNIQUE,          -- TACO, NC3...
-  name             TEXT NOT NULL,                 -- NMTĐ Tà Cọ
+  name             TEXT NOT NULL,                 -- NMTĐ Tà Cọ (lấy theo tên đơn vị SSO)
   warehouse_code   TEXT UNIQUE,                   -- mã kho ở phần mềm cũ: KHOTACO
   warehouse_name   TEXT,
   address          TEXT,
   request_prefix   TEXT,                          -- hậu tố số phiếu: PNC-TC&NC3-SBM
   director_id      INTEGER REFERENCES users(id),  -- GĐ/PGĐ phụ trách duyệt nhu cầu (mặc định)
   sort             INTEGER NOT NULL DEFAULT 0,
-  active           INTEGER NOT NULL DEFAULT 1
+  active           INTEGER NOT NULL DEFAULT 1,
+  department_id    INTEGER REFERENCES departments(id)  -- đơn vị SSO của kho (duy nhất, tạo chỉ mục khi nâng cấp CSDL)
 );
 
 -- ===== Dữ liệu đồng bộ từ SSO =====
 CREATE TABLE IF NOT EXISTS departments (
   id         INTEGER PRIMARY KEY,
-  sso_id     TEXT NOT NULL UNIQUE,
+  sso_id     TEXT NOT NULL UNIQUE,                -- id phòng ban SSO; đơn vị ảo: role:HDQT, role:BKS, role:BGD
   code       TEXT,
   name       TEXT NOT NULL,
-  factory_id INTEGER REFERENCES factories(id),   -- bộ phận thuộc nhà máy nào (cấu hình trong QLVT)
+  factory_id INTEGER REFERENCES factories(id),   -- nhân sự đơn vị này thuộc kho nào
+  virtual    INTEGER NOT NULL DEFAULT 0,          -- 1 = đơn vị ảo (HĐQT / BKS / Ban giám đốc), không có kho
   active     INTEGER NOT NULL DEFAULT 1
 );
 
@@ -49,8 +51,18 @@ CREATE TABLE IF NOT EXISTS users (
   position_id   INTEGER REFERENCES positions(id),
   active        INTEGER NOT NULL DEFAULT 1,
   is_admin      INTEGER NOT NULL DEFAULT 0,
+  sso_admin     INTEGER NOT NULL DEFAULT 0,       -- quản trị trên SSO (cập nhật mỗi lần đăng nhập)
   last_login_at TEXT,
   synced_at     TEXT
+);
+
+-- Mọi đơn vị / chức vụ của người dùng trên SSO; member = 0: chỉ "Người phụ trách", không là nhân sự đơn vị
+CREATE TABLE IF NOT EXISTS user_departments (
+  user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  department_id INTEGER NOT NULL REFERENCES departments(id) ON DELETE CASCADE,
+  role          TEXT NOT NULL DEFAULT '',
+  member        INTEGER NOT NULL DEFAULT 1,
+  PRIMARY KEY (user_id, department_id, role)
 );
 
 CREATE TABLE IF NOT EXISTS sessions (

@@ -10,4 +10,4 @@ npm test
 npm run backup           # sao lưu CSDL vào BACKUP_DIR (nhớ sao lưu kèm UPLOAD_DIR)
 ```
 
-Yêu cầu Node.js ≥ 22.13. Cấu hình xem `.env.example`. Mô tả đầy đủ yêu cầu, chức năng và việc còn lại: [TONG-QUAN.md](TONG-QUAN.md).
+Yêu cầu Node.js ≥ 22.13. Cấu hình xem `.env.example`: chạy thật thì đặt `SSO_BASE_URL` và `SSO_INTERNAL_API_SECRET` giống app Payroll (đăng nhập bằng cách mở QLVT từ SSO Portal), rồi vào Cài đặt tích các đơn vị có kho. Mô tả đầy đủ yêu cầu, chức năng và việc còn lại: [TONG-QUAN.md](TONG-QUAN.md).

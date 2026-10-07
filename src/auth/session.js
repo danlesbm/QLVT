@@ -26,12 +26,12 @@ function createSession(db, res, userId) {
   db.run('DELETE FROM sessions WHERE expires_at < ?', new Date().toISOString());
   db.run('INSERT INTO sessions (id, user_id, csrf, expires_at) VALUES (?, ?, ?, ?)', id, userId, csrf, expires.toISOString());
   db.run(`UPDATE users SET last_login_at = datetime('now','localtime') WHERE id = ?`, userId);
-  res.cookie(COOKIE, id, { httpOnly: true, sameSite: 'lax', secure: config.cookieSecure, expires });
+  res.cookie(COOKIE, id, { httpOnly: true, sameSite: config.cookieSameSite, secure: config.cookieSecure, expires });
 }
 
 function destroySession(db, req, res) {
   if (req.cookies[COOKIE]) db.run('DELETE FROM sessions WHERE id = ?', req.cookies[COOKIE]);
-  res.clearCookie(COOKIE);
+  res.clearCookie(COOKIE, { httpOnly: true, sameSite: config.cookieSameSite, secure: config.cookieSecure });
 }
 
 /** Gắn req.user, req.access, res.locals cho view. */
@@ -53,6 +53,7 @@ function sessionMiddleware(db) {
       }
     }
     res.locals.user = req.user || null;
+    res.locals.isAdmin = !!req.access?.isAdmin;
     res.locals.csrf = req.csrf || '';
     res.locals.can = (perm, factoryId) => can(req.access, perm, factoryId);
     next();

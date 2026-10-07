@@ -1,6 +1,6 @@
 'use strict';
 const { AppError, str, num, toArray } = require('./util');
-const { can, factoryScope } = require('../auth/access');
+const { can, factoryScope, isAdminUser } = require('../auth/access');
 const stock = require('./stock');
 
 /** Trạng thái phiếu đề xuất theo đúng quy trình của công ty. */
@@ -515,7 +515,7 @@ function act(db, user, access, id, action, data = {}, file = null) {
 function hasPerm(db, userId, perm) {
   const u = db.one('SELECT * FROM users WHERE id = ? AND active = 1', userId);
   if (!u) return false;
-  if (u.is_admin) return true;
+  if (isAdminUser(u)) return true;
   return db.all('SELECT r.permissions FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = ?', userId)
     .some((x) => JSON.parse(x.permissions).includes(perm));
 }

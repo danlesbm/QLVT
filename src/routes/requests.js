@@ -7,7 +7,7 @@ const svc = require('../services/requests');
 const { requestWorkbook } = require('../exports/excel');
 const { usersWith } = require('../auth/access');
 const { toArray } = require('../services/util');
-const { factoriesFor, allFactories, upload, fixName, sendWorkbook, forbidden } = require('./common');
+const { factoriesFor, allFactories, upload, fixName, sendWorkbook, forbidden, noFactoryMessage } = require('./common');
 
 // Thao tác có tệp đính kèm
 const FILE_ACTIONS = new Set(['quote_add', 'price_external']);
@@ -54,7 +54,7 @@ module.exports = (db) => {
 
   r.get('/moi', (req, res) => {
     const factories = factoriesFor(db, req.access, 'request.create');
-    if (!factories.length) return forbidden(res, 'Bạn chưa được phân quyền lập phiếu đề xuất.');
+    if (!factories.length) return forbidden(res, noFactoryMessage(db, 'lập phiếu đề xuất'));
     const now = new Date();
     const factory = factories.find((f) => f.id === req.user.home_factory_id) || factories[0];
     const month = `${now.getMonth() + 1}/${now.getFullYear()}`;

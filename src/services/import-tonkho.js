@@ -2,6 +2,7 @@
 const ExcelJS = require('exceljs');
 const stock = require('./stock');
 const { AppError } = require('./util');
+const plants = require('./plants');
 
 /** Chuẩn hóa đơn vị tính viết không dấu của phần mềm cũ. */
 const UNITS = {
@@ -103,29 +104,40 @@ async function parse(buffer) {
 }
 
 /**
- * Ghi dữ liệu tồn kho vào CSDL: tạo mã vật tư (mã chung toàn công ty) nếu chưa có,
- * tạo kho nếu mã kho chưa có, và đặt số lượng tồn bằng số trong file.
+ * Ghi dữ liệu tồn kho vào CSDL: tạo mã vật tư (mã chung toàn công ty) nếu chưa có và đặt số lượng tồn bằng số trong file.
+ * Kho tìm theo "Mã kho (phần mềm cũ)", rồi theo mã kho / tên nhà máy (vd KHOTACO -> kho TACO / NMTĐ Tà Cọ).
+ * Kho không có trong QLVT thì từ chối cả file: kho chỉ tạo bằng cách tích đơn vị SSO có kho trong Cài đặt.
  */
 function apply(db, user, rows, { defaultFactoryId } = {}) {
-  const result = { materials_created: 0, stock_rows: 0, factories_created: [], errors: [] };
+  const result = { materials_created: 0, stock_rows: 0, errors: [] };
   db.tx(() => {
     const up = (v) => String(v || '').trim().toUpperCase();
-    const factories = new Map(db.all('SELECT id, warehouse_code FROM factories WHERE warehouse_code IS NOT NULL').map((f) => [up(f.warehouse_code), f.id]));
+    const all = db.all('SELECT * FROM factories WHERE active = 1');
+    const byWarehouse = new Map(all.filter((f) => f.warehouse_code).map((f) => [up(f.warehouse_code), f.id]));
+    const codes = [...new Set(rows.map((r) => up(r.warehouse)).filter((w) => w && !byWarehouse.has(w)))];
+    // Mã kho cũ chưa khai báo: thử khớp theo mã kho, rồi theo tên nhà máy
+    const byCode = new Map(all.map((f) => [up(f.code), f.id]));
+    const rest = [];
+    for (const w of codes) {
+      const fid = byCode.get(w.replace(/^KHO/, '')) || byCode.get(w);
+      if (fid) byWarehouse.set(w, fid);
+      else rest.push(w);
+    }
+    const guessed = plants.pairUnique(rest, all.filter((f) => ![...byWarehouse.values()].includes(f.id)), (w) => plants.plantKeys(w.replace(/^KHO/, '')), plants.factoryKeys);
+    for (const [w, f] of guessed) byWarehouse.set(w, f.id);
+    const unknown = rest.filter((w) => !guessed.has(w));
+    // Lần sau tìm thẳng theo mã kho cũ
+    for (const w of codes) {
+      if (!byWarehouse.has(w) || db.one('SELECT 1 FROM factories WHERE upper(warehouse_code) = ?', w)) continue;
+      db.run('UPDATE factories SET warehouse_code = ? WHERE id = ? AND warehouse_code IS NULL', w, byWarehouse.get(w));
+    }
+    if (unknown.length) {
+      throw new AppError(`Chưa có kho nào trong QLVT ứng với mã kho ${unknown.join(', ')} của file. Vào Cài đặt › Đơn vị có kho: tích đơn vị có kho, rồi mở kho đó và điền "Mã kho (phần mềm cũ)" = mã trong file. Chưa ghi gì vào kho.`);
+    }
     // Một mã có thể xuất hiện nhiều lần trong cùng một kho: cộng dồn số lượng
     const totals = new Map();
     for (const r of rows) {
-      let fid = r.warehouse ? factories.get(up(r.warehouse)) : defaultFactoryId;
-      if (!fid && r.warehouse) {
-        // Thử khớp theo mã nhà máy (vd KHOTACO -> TACO) trước khi tạo kho mới
-        const code = r.warehouse.replace(/^KHO/i, '') || r.warehouse;
-        const byCode = db.one('SELECT id FROM factories WHERE upper(code) = ?', up(code));
-        if (byCode) fid = byCode.id;
-        else {
-          fid = Number(db.run('INSERT INTO factories (code, name, warehouse_code, warehouse_name, sort) VALUES (?, ?, ?, ?, 99)', code, `Nhà máy ${code}`, r.warehouse, r.warehouse).lastInsertRowid);
-          result.factories_created.push(r.warehouse);
-        }
-        factories.set(up(r.warehouse), fid);
-      }
+      const fid = r.warehouse ? byWarehouse.get(up(r.warehouse)) : defaultFactoryId;
       if (!fid) {
         result.errors.push(`Dòng ${r.line}: không xác định được kho`);
         continue;
