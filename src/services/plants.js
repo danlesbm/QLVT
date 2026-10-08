@@ -19,23 +19,16 @@ const PREFIX = /^(nha may thuy dien|nha may|nmtd|thuy dien)( |$)/;
 /** Tách tên thành các từ không dấu, bỏ tiền tố "NMTĐ" / "Nhà máy (thủy điện)". */
 function nameWords(name) {
   let s = plain(name).replace(/[^a-z0-9]+/g, ' ').trim();
-  let plant = false;
-  for (let m = PREFIX.exec(s); m; m = PREFIX.exec(s)) {
-    s = s.slice(m[0].length).trim();
-    plant = true;
-  }
-  return { words: s ? s.split(' ') : [], plant };
+  for (let m = PREFIX.exec(s); m; m = PREFIX.exec(s)) s = s.slice(m[0].length).trim();
+  return s ? s.split(' ') : [];
 }
 
 const initials = (w) => w.map((x) => (/^\d+$/.test(x) ? x : x[0])).join('');
 
-/** Khóa nhận diện tên nhà máy: "NMTĐ Suối Sập 3" -> ["suoisap3", "ss3"]; "TACO" -> ["taco"]. */
+/** Khóa nhận diện tên nhà máy (cả tên, không dấu, bỏ tiền tố): "NMTĐ Suối Sập 3" -> ["suoisap3"]; "TACO" -> ["taco"]. */
 function plantKeys(name) {
-  const { words, plant } = nameWords(name);
-  if (!words.length) return [];
-  const keys = [words.join('')];
-  if (plant && words.length > 1) keys.push(initials(words));
-  return keys;
+  const words = nameWords(name);
+  return words.length ? [words.join('')] : [];
 }
 
 function factoryKeys(f) {
@@ -70,7 +63,9 @@ function pairUnique(left, right, leftKeys, rightKeys) {
   return pairs;
 }
 
-const knownPlantFor = (name) => pairUnique([name], KNOWN_PLANTS, plantKeys, (k) => k.keys).get(name) || null;
+const deptKeys = (d) => plantKeys(d.name);
+/** Phần tử bên phải được ghép với đơn vị dept (null nếu không ghép được). */
+const partnerOf = (pairs, dept) => [...pairs].find(([l]) => l.id === dept.id)?.[1] || null;
 
 /** Gắn kho với đơn vị SSO; tên kho lấy theo tên đơn vị. */
 function linkFactory(db, factoryId, departmentId) {
@@ -102,33 +97,46 @@ function autoLinkFactories(db) {
   const facs = db.all('SELECT * FROM factories WHERE department_id IS NULL AND active = 1');
   if (!facs.length) return [];
   const deps = db.all('SELECT * FROM departments WHERE active = 1 AND virtual = 0 AND id NOT IN (SELECT department_id FROM factories WHERE department_id IS NOT NULL)');
-  const pairs = pairUnique(facs, deps, factoryKeys, (d) => plantKeys(d.name));
+  const pairs = pairUnique(facs, deps, factoryKeys, deptKeys);
   for (const [f, d] of pairs) linkFactory(db, f.id, d.id);
   return [...pairs].map(([f, d]) => `${f.code} → ${d.name}`);
 }
 
+// Mã / mã kho của nhà máy cũ để dành cho chính nhà máy đó: kho khác không lấy trùng (dù chưa có kho nào dùng)
+const RESERVED = {
+  code: new Set(KNOWN_PLANTS.map((k) => k.code)),
+  warehouse_code: new Set(KNOWN_PLANTS.map((k) => k.warehouse_code)),
+};
+
 function uniqueValue(db, col, base) {
-  const taken = (v) => db.one(`SELECT 1 FROM factories WHERE upper(${col}) = upper(?)`, v);
+  const taken = (v) => RESERVED[col].has(v.toUpperCase()) || db.one(`SELECT 1 FROM factories WHERE upper(${col}) = upper(?)`, v);
   let v = base;
   for (let i = 2; taken(v); i++) v = `${base}${i}`;
   return v;
 }
 
-/** Tạo kho cho đơn vị SSO (hoặc dùng lại kho cũ chưa gắn đơn vị có tên khớp). Trả về id kho. */
+/**
+ * Tạo kho cho đơn vị SSO (hoặc dùng lại kho cũ chưa gắn đơn vị có tên khớp). Trả về id kho.
+ * So khớp với mọi đơn vị cùng lúc: kho cũ / nhà máy cũ khớp nhiều đơn vị thì không tự ghép (quản trị tự gắn).
+ */
 function enableWarehouse(db, dept) {
+  const units = db.all('SELECT * FROM departments WHERE virtual = 0 AND (active = 1 OR id = ?)', dept.id);
+  const linkedIds = new Set(db.all('SELECT department_id AS id FROM factories WHERE department_id IS NOT NULL').map((x) => x.id));
   const legacy = db.all('SELECT * FROM factories WHERE department_id IS NULL');
-  const match = pairUnique([dept], legacy, (d) => plantKeys(d.name), factoryKeys).get(dept);
+  const match = partnerOf(pairUnique(units.filter((d) => !linkedIds.has(d.id)), legacy, deptKeys, factoryKeys), dept);
   if (match) {
     linkFactory(db, match.id, dept.id);
     db.run('UPDATE factories SET active = 1 WHERE id = ?', match.id);
     return match.id;
   }
-  const known = knownPlantFor(dept.name);
   const free = (col, v) => v && !db.one(`SELECT 1 FROM factories WHERE upper(${col}) = upper(?)`, v);
-  const { words } = nameWords(dept.name);
+  let known = partnerOf(pairUnique(units, KNOWN_PLANTS, deptKeys, (k) => k.keys), dept);
+  // Mã của nhà máy cũ đã dùng cho kho khác: không dùng lại mã kho cũ / ký hiệu số phiếu của nó
+  if (known && !free('code', known.code)) known = null;
+  const words = nameWords(dept.name);
   const guess = (words.length > 1 ? initials(words) : (words[0] || 'kho').slice(0, 8)).toUpperCase();
-  const code = known && free('code', known.code) ? known.code : uniqueValue(db, 'code', guess);
-  const wh = known && free('warehouse_code', known.warehouse_code) ? known.warehouse_code : free('warehouse_code', `KHO${code}`) ? `KHO${code}` : null;
+  const code = known ? known.code : uniqueValue(db, 'code', guess);
+  const wh = known && free('warehouse_code', known.warehouse_code) ? known.warehouse_code : uniqueValue(db, 'warehouse_code', `KHO${code}`);
   const sort = (db.one('SELECT MAX(sort) m FROM factories').m || 0) + 1;
   const id = Number(
     db.run(
@@ -164,4 +172,22 @@ function setWarehouseUnits(db, shownIds, tickedIds) {
   return out;
 }
 
-module.exports = { KNOWN_PLANTS, plantKeys, factoryKeys, pairUnique, linkFactory, refreshFactoryNames, autoLinkFactories, enableWarehouse, setWarehouseUnits };
+/** Kho chưa có dữ liệu nào (tồn, biến động, phiếu, mã riêng): xóa được an toàn. */
+function isEmptyFactory(db, id) {
+  return !['stock', 'stock_movements', 'requests', 'issues', 'materials'].some((t) => db.one(`SELECT 1 FROM ${t} WHERE factory_id = ? LIMIT 1`, id));
+}
+
+/**
+ * Đơn vị đang gắn với một kho đã ngưng và chưa có dữ liệu (vd tích nhầm rồi bỏ tích): xóa kho đó để gắn kho khác
+ * (thường là kho của bản trước đang giữ tồn kho). Trả về true nếu đơn vị đã trống.
+ */
+function releaseUnit(db, deptId, exceptFactoryId) {
+  const f = db.one('SELECT * FROM factories WHERE department_id = ? AND id <> ?', deptId, exceptFactoryId || 0);
+  if (!f) return true;
+  if (f.active || !isEmptyFactory(db, f.id)) return false;
+  db.run('UPDATE departments SET factory_id = NULL WHERE factory_id = ?', f.id);
+  db.run('DELETE FROM factories WHERE id = ?', f.id);
+  return true;
+}
+
+module.exports = { isEmptyFactory, releaseUnit, KNOWN_PLANTS, plantKeys, factoryKeys, pairUnique, linkFactory, refreshFactoryNames, autoLinkFactories, enableWarehouse, setWarehouseUnits };

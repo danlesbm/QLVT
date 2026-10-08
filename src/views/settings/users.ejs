@@ -7,7 +7,7 @@
   <div class="table-responsive"><table class="table table-sm table-hover">
     <thead><tr><th>Họ tên</th><th>Tài khoản</th><th>Bộ phận</th><th>Chức vụ</th><th>Quyền trong QLVT</th><th></th></tr></thead>
     <tbody><% users.forEach(u => { %><tr class="<%= u.active ? '' : 'text-muted' %>">
-      <td class="fw-semibold"><%= u.full_name %><% if (u.is_admin) { %> <span class="badge text-bg-dark">Quản trị</span><% } %><% if (!u.active) { %> <span class="badge text-bg-secondary">Ngưng</span><% } %></td>
+      <td class="fw-semibold"><%= u.full_name %><% if (u.admin) { %> <span class="badge text-bg-dark"><%= u.is_admin ? 'Quản trị' : 'Quản trị (SSO)' %></span><% } %><% if (!u.active) { %> <span class="badge text-bg-secondary">Ngưng</span><% } %></td>
       <td class="small"><%= u.username || u.sso_id %></td><td class="small"><%= u.department_name || '' %></td><td class="small"><%= u.position_name || '' %></td>
       <td class="small"><%= u.roles || '' %></td><td><a href="/cai-dat/nguoi-dung/<%= u.id %>" class="btn btn-sm btn-outline-primary">Phân quyền</a></td></tr><% }) %></tbody>
   </table></div>

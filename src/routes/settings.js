@@ -1,7 +1,7 @@
 'use strict';
 const express = require('express');
 const { PERMISSIONS, isPlantRole } = require('../auth/permissions');
-const { can, usersWith, memberFactoryIds, factoryMembers } = require('../auth/access');
+const { can, usersWith, memberFactoryIds, factoryMembers, isAdminUser } = require('../auth/access');
 const { runSync } = require('../sso');
 const plants = require('../services/plants');
 const { AppError, str } = require('../services/util');
@@ -94,11 +94,12 @@ module.exports = (db) => {
     res.render('settings/factory', {
       title: `Kho ${row.name}`, row,
       unit: row.department_id ? db.one('SELECT * FROM departments WHERE id = ?', row.department_id) : null,
+      // Đơn vị chưa có kho (hoặc chỉ có kho đã ngưng, chưa có dữ liệu: chọn thì kho đó được xóa)
       units: db.all(
-        `SELECT d.* FROM departments d WHERE d.virtual = 0 AND (d.active = 1 OR d.id = ?)
-            AND d.id NOT IN (SELECT department_id FROM factories WHERE department_id IS NOT NULL AND id <> ?) ORDER BY d.name`,
-        row.department_id || 0, row.id,
-      ),
+        `SELECT d.*, f.id AS other_id, f.active AS other_active FROM departments d LEFT JOIN factories f ON f.department_id = d.id AND f.id <> ?
+          WHERE d.virtual = 0 AND (d.active = 1 OR d.id = ?) ORDER BY d.name`,
+        row.id, row.department_id || 0,
+      ).filter((d) => !d.other_id || (!d.other_active && plants.isEmptyFactory(db, d.other_id))),
       directors: usersWith(db, 'request.approve_director'),
       departments: db.all(
         `SELECT d.*, f.name AS factory_name FROM departments d LEFT JOIN factories f ON f.id = d.factory_id
@@ -134,12 +135,15 @@ module.exports = (db) => {
     // So khớp không phân biệt hoa thường, giống cách import tồn kho tìm kho theo mã
     if (db.one('SELECT 1 FROM factories WHERE upper(code) = upper(?) AND id <> ?', code, id)) throw new AppError(`Mã kho ${code} đã tồn tại`);
     if (str(b.warehouse_code) && db.one('SELECT 1 FROM factories WHERE upper(warehouse_code) = upper(?) AND id <> ?', str(b.warehouse_code), id)) throw new AppError(`Mã kho ${b.warehouse_code} đã dùng cho kho khác`);
-    const other = unit && db.one('SELECT name FROM factories WHERE department_id = ? AND id <> ?', unit.id, id);
-    if (other) throw new AppError(`Đơn vị ${unit.name} đã có kho "${other.name}"`);
+    // Tên kho in trên phiếu đang theo tên đơn vị cũ thì đổi theo đơn vị mới; tên quản trị tự đặt thì giữ
+    const posted = str(b.warehouse_name);
+    const whName = unit && unit.id !== row.department_id && (!posted || posted === `Kho ${row.name}`) ? `Kho ${unit.name}` : posted;
     db.tx(() => {
+      const other = unit && db.one('SELECT name FROM factories WHERE department_id = ? AND id <> ?', unit.id, id);
+      if (other && !plants.releaseUnit(db, unit.id, id)) throw new AppError(`Đơn vị ${unit.name} đã có kho "${other.name}"`);
       db.run(
         'UPDATE factories SET code=?, name=?, warehouse_code=?, warehouse_name=?, address=?, request_prefix=?, director_id=?, sort=?, active=? WHERE id=?',
-        code, name, str(b.warehouse_code), str(b.warehouse_name), str(b.address), str(b.request_prefix), b.director_id ? Number(b.director_id) : null,
+        code, name, str(b.warehouse_code), whName, str(b.address), str(b.request_prefix), b.director_id ? Number(b.director_id) : null,
         Number(b.sort) || 0, b.active ? 1 : 0, id,
       );
       // Bộ phận SSO khác có nhân sự thuộc kho này (vd tổ, đội của nhà máy tách riêng trên SSO)
@@ -220,7 +224,7 @@ module.exports = (db) => {
         ORDER BY u.active DESC, d.name, u.full_name`,
       q, q, q, Number(req.query.dep) || 0, Number(req.query.dep) || 0,
     );
-    res.render('settings/users', { title: 'Người dùng & phân quyền', users, query: req.query, departments: db.all('SELECT * FROM departments WHERE active = 1 ORDER BY name') });
+    res.render('settings/users', { title: 'Người dùng & phân quyền', users: users.map((u) => ({ ...u, admin: isAdminUser(u) })), query: req.query, departments: db.all('SELECT * FROM departments WHERE active = 1 ORDER BY name') });
   });
 
   r.get('/nguoi-dung/:id', need('admin.permissions'), (req, res) => {
@@ -237,7 +241,7 @@ module.exports = (db) => {
       u.id,
     ).map((a) => ({ ...a, stale: a.factory_id != null && isPlantRole(a.permissions) && !members.has(a.factory_id) }));
     res.render('settings/user', {
-      title: u.full_name, u, assigned, PERMISSIONS, members,
+      title: u.full_name, u: { ...u, admin: isAdminUser(u) }, assigned, PERMISSIONS, members,
       units: db.all(
         `SELECT d.name, ud.role, ud.member, f.name AS factory_name FROM user_departments ud JOIN departments d ON d.id = ud.department_id
            LEFT JOIN factories f ON f.id = d.factory_id AND f.active = 1 WHERE ud.user_id = ? ORDER BY ud.member DESC, d.name`,

@@ -90,7 +90,7 @@ Giống app Payroll, không cần sửa SSO. Khi có `SSO_BASE_URL` app chạy c
 - An toàn: SSO trả về thiếu (rỗng hoặc ít hơn một nửa số đang có) thì không ngưng hoạt động ai và giữ nguyên phân công, chỉ cảnh báo. Đơn vị có kho không còn trên SSO thì cảnh báo, kho vẫn giữ.
 - Cấu hình: `SSO_BASE_URL`, `SSO_INTERNAL_API_SECRET` (trùng với SSO, như Payroll), `FRAME_ANCESTORS`, `SYNC_INTERVAL_MIN`; xem `.env.example`.
 
-Không có `SSO_BASE_URL` thì chạy SSO giả lập (màn hình đăng nhập liệt kê danh bạ mẫu, cùng định dạng danh bạ thật). Khi `NODE_ENV=production` mà chưa cấu hình SSO Portal thì app không khởi động, tránh lỡ mở chế độ giả lập.
+Không có `SSO_BASE_URL` thì chạy SSO giả lập (màn hình đăng nhập liệt kê danh bạ mẫu, cùng định dạng danh bạ thật). Khi `NODE_ENV=production` mà chưa cấu hình SSO Portal thì app không khởi động, tránh lỡ mở chế độ giả lập. Dòng `SSO_MODE` của bản trước (`oidc`) không còn dùng: còn trong `.env` thì app báo lỗi cấu hình và không khởi động, xóa dòng đó đi.
 
 ## 5. Chạy thử
 
@@ -138,6 +138,13 @@ Sau khi hoàn thiện chức năng, toàn bộ mã nguồn được rà soát l�
 - Bấm "Lưu" 2 lần hoặc quay lại gửi lại form nhập thêm làm tồn bị cộng 2 lần: mỗi form có mã dùng một lần, nút Lưu bị khóa khi đang gửi.
 - Phiếu đang chờ nhân viên báo giá hiện nhầm trong "Việc cần tôi xử lý" của TP Kế hoạch.
 - Nhập thêm vào dòng tồn đang âm (dữ liệu cũ) bị chặn; đổi ký hiệu số phiếu của một nhà máy có thể làm trùng số; mã kho trùng nhau khác hoa thường; sửa mã riêng của nhà máy đã ngưng hoạt động làm mã thành mã chung; chọn mã không có thông số xóa mất chữ người dùng tự gõ; `npm run backup` khi sai đường dẫn CSDL tạo file rỗng.
+
+**Rà soát phần kết nối SSO và đơn vị có kho** (08/10/2026), sửa thêm:
+- `SSO_MODE` sai (vd `oidc` của bản trước) hoặc đặt `mock` trong khi có `SSO_BASE_URL`: app báo lỗi cấu hình thay vì lặng lẽ chạy SSO giả lập.
+- Danh bạ SSO trả thiếu phân công phòng ban (lỗi, phân trang): giữ nguyên đơn vị của CBCNV thay vì làm mọi người rơi khỏi kho; người đã rời SSO bị bỏ khỏi nhân sự kho.
+- Phòng ban chỉ thấy trong phân công không còn ghi đè tên phòng ban đã có; tên viết tắt (BKS, GĐ, PGĐ, NV) cạnh chữ có dấu được nhận đúng khi làm sạch tên.
+- Tích kho cho đơn vị có tên gần giống nhà máy cũ (vd "Suối Sập 2", "Nậm Chiến 3") không lấy nhầm mã kho / ký hiệu số phiếu của nhà máy cũ; kho cũ khớp nhiều đơn vị thì chờ quản trị chọn.
+- Gắn lại kho cũ (đang giữ tồn kho) vào đơn vị lỡ tích nhầm trước đó; đổi đơn vị thì tên kho tự đặt đổi theo; nhãn "Quản trị (SSO)" cho người là quản trị trên SSO.
 
 ## 7. Việc còn lại / cần người dùng xác nhận
 

@@ -4,9 +4,14 @@
  *  Quản lý:   "Chức vụ - Họ và tên"        (vd "Phó phòng kỹ thuật - Phạm Văn Hảo")
  *  Nhân viên: "Họ và tên - NV bộ phận xxx" (vd "Nguyễn Vân Kiều - NV Văn phòng")
  */
-const POS = /(chủ tịch|hđqt|\bbks\b|thành viên|hành chính|giám đốc|\bgđ\b|phó|trưởng|chánh|phụ trách|kế toán|\bnv\b|nhân viên|lái xe|kỹ thuật|kỹ sư|vận hành|thủ quỹ|văn thư|bảo vệ|tạp vụ|nmtđ|nhà máy|phòng|bộ phận|ban |hội đồng|kiểm soát)/i;
-const BOARD = /(hội đồng quản trị|ban kiểm soát)/i;
-const MANAGER = /(giám đốc|phó gđ|trưởng phòng|phó phòng|hội đồng quản trị|kiểm soát)/i;
+// Từ viết tắt (BKS, GĐ, PGĐ, NV) phải đứng riêng; \b của JS không hiểu chữ có dấu nên dùng ranh giới Unicode
+const W = (x) => `(?<![\\p{L}\\p{N}])${x}(?![\\p{L}\\p{N}])`;
+const POS = new RegExp(
+  `(chủ tịch|hđqt|${W('bks')}|thành viên|hành chính|giám đốc|${W('p?gđ')}|phó|trưởng|chánh|phụ trách|kế toán|${W('nv')}|nhân viên|lái xe|kỹ thuật|kỹ sư|vận hành|thủ quỹ|văn thư|bảo vệ|tạp vụ|nmtđ|nhà máy|phòng|bộ phận|ban |hội đồng|kiểm soát)`,
+  'iu',
+);
+const BOARD = /(hội đồng quản trị|ban kiểm soát)/iu;
+const MANAGER = /(giám đốc|phó gđ|trưởng phòng|phó phòng|hội đồng quản trị|kiểm soát)/iu;
 
 function cleanName(raw, positions = '') {
   const s = String(raw || '').replace(/\s+/g, ' ').trim();

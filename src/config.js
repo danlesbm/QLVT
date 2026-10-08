@@ -11,7 +11,14 @@ try {
 const env = process.env;
 const root = path.join(__dirname, '..');
 const list = (v) => (v || '').split(',').map((s) => s.trim()).filter(Boolean);
-const ssoMode = env.SSO_MODE || (env.SSO_BASE_URL ? 'portal' : 'mock');
+// Có SSO_BASE_URL là dùng SSO Portal; SSO_MODE (nếu đặt) chỉ nhận portal / mock, giá trị khác (vd "oidc" của bản cũ) là lỗi cấu hình
+const ssoModeRaw = String(env.SSO_MODE || '').trim().toLowerCase();
+const ssoMode = ssoModeRaw || (env.SSO_BASE_URL ? 'portal' : 'mock');
+const ssoModeError =
+  !['portal', 'mock'].includes(ssoMode) ? `SSO_MODE="${env.SSO_MODE}" không hợp lệ: bỏ dòng SSO_MODE (có SSO_BASE_URL là dùng SSO Portal) hoặc đặt portal / mock.`
+  : ssoMode === 'mock' && env.SSO_BASE_URL ? 'Đã đặt SSO_BASE_URL nhưng SSO_MODE=mock (SSO giả lập, ai cũng đăng nhập được): bỏ dòng SSO_MODE khỏi .env.'
+  : ssoMode === 'portal' && !env.SSO_BASE_URL ? 'SSO_MODE=portal nhưng chưa đặt SSO_BASE_URL.'
+  : null;
 const sameSite = ['strict', 'none'].includes(String(env.COOKIE_SAMESITE).toLowerCase()) ? String(env.COOKIE_SAMESITE).toLowerCase() : 'lax';
 
 module.exports = {
@@ -30,6 +37,8 @@ module.exports = {
   // SSO: "portal" (SSO Portal của công ty, giống Payroll) hoặc "mock" (danh bạ giả lập để phát triển/demo)
   sso: {
     mode: ssoMode,
+    // Lỗi cấu hình SSO: máy chủ không khởi động (xem src/server.js)
+    configError: ssoModeError,
     baseUrl: (env.SSO_BASE_URL || '').replace(/\/+$/, ''),
     // Trang SSO Portal để người dùng mở lại app (mặc định là SSO_BASE_URL)
     portalUrl: env.SSO_PORTAL_URL || env.SSO_BASE_URL || '',

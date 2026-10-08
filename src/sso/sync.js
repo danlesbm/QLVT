@@ -26,7 +26,7 @@ const NOT_MEMBER = new Set(['người phụ trách']);
 function normalizeDirectory(dir) {
   const deps = new Map();
   for (const d of dir.departments || []) {
-    if (d && txt(d.id)) deps.set(txt(d.id), { id: txt(d.id), name: txt(d.name) || txt(d.id), virtual: 0 });
+    if (d && txt(d.id)) deps.set(txt(d.id), { id: txt(d.id), name: txt(d.name) || txt(d.id), virtual: 0, placeholder: 0 });
   }
   const roles = new Set();
   const byUser = new Map();
@@ -39,11 +39,12 @@ function normalizeDirectory(dir) {
     let member = 0;
     if (v) {
       [deptId] = v;
-      if (!deps.has(deptId)) deps.set(deptId, { id: deptId, name: v[1], virtual: 1 });
+      if (!deps.has(deptId)) deps.set(deptId, { id: deptId, name: v[1], virtual: 1, placeholder: 0 });
       member = 1;
     } else if (txt(a.deptId)) {
       deptId = txt(a.deptId);
-      if (!deps.has(deptId)) deps.set(deptId, { id: deptId, name: deptId, virtual: 0 });
+      // Phòng ban chỉ có trong phân công (không có trong danh sách phòng ban): tạm lấy id làm tên
+      if (!deps.has(deptId)) deps.set(deptId, { id: deptId, name: deptId, virtual: 0, placeholder: 1 });
       member = NOT_MEMBER.has(role.toLowerCase()) ? 0 : 1;
     }
     const k = txt(a.userId);
@@ -86,7 +87,12 @@ function syncDirectory(db, dir, opts = {}) {
       `INSERT INTO departments (sso_id, name, virtual, active) VALUES (?, ?, ?, 1)
        ON CONFLICT(sso_id) DO UPDATE SET name = excluded.name, virtual = excluded.virtual, active = 1`,
     );
-    for (const d of nd.departments) upDep.run(d.id, d.name, d.virtual);
+    // Phòng ban tạm (chỉ thấy trong phân công) không ghi đè tên / trạng thái phòng ban đã có
+    const addDep = db.prepare(`INSERT INTO departments (sso_id, name, virtual, active) VALUES (?, ?, 0, 1) ON CONFLICT(sso_id) DO NOTHING`);
+    for (const d of nd.departments) {
+      if (d.placeholder) addDep.run(d.id, d.name);
+      else upDep.run(d.id, d.name, d.virtual);
+    }
     const upPos = db.prepare(
       `INSERT INTO positions (sso_id, name, active) VALUES (?, ?, 1)
        ON CONFLICT(sso_id) DO UPDATE SET name = excluded.name, active = 1`,
@@ -96,17 +102,19 @@ function syncDirectory(db, dir, opts = {}) {
     // thì không ngưng ai / không xóa phân công nào, chỉ cảnh báo.
     const warnings = [];
     const assigned = (dir.assignments || []).length;
-    const current = db.one('SELECT COUNT(*) n FROM user_departments').n;
+    const current = db.one('SELECT COUNT(*) n FROM user_departments ud JOIN users u ON u.id = ud.user_id WHERE u.active = 1').n;
     const trustAssignments = current === 0 || (assigned > 0 && assigned >= current * 0.5);
     if (!trustAssignments) warnings.push(`SSO chỉ trả về ${assigned}/${current} phân công phòng ban: giữ nguyên đơn vị, chức vụ của CBCNV`);
     for (const u of nd.users) upsertUser(db, u, { ...opts, stamp, memberships: trustAssignments });
 
     // Đơn vị / chức vụ / người không còn trong SSO thì ngưng hoạt động.
-    const realDeps = nd.departments.filter((d) => !d.virtual);
+    // Chỉ tính phòng ban SSO liệt kê (và đơn vị ảo đang dùng); phòng ban tạm không giữ phòng ban cũ khỏi bị ngưng.
+    const realDeps = nd.departments.filter((d) => !d.virtual && !d.placeholder);
+    const keepDeps = nd.departments.filter((d) => !d.placeholder);
     // Chức vụ ngưng hoạt động không ảnh hưởng ai (chỉ để đếm) nên chỉ bỏ qua khi SSO không trả về chức vụ nào
     if (nd.positions.length) db.run(`UPDATE positions SET active = 0 WHERE active = 1 AND sso_id NOT IN (${nd.positions.map(() => '?').join(',')})`, ...nd.positions.map((p) => p.id));
     const checks = [
-      ['departments', 'virtual = 0', realDeps, nd.departments, 'phòng ban / nhà máy'],
+      ['departments', 'virtual = 0', realDeps, keepDeps, 'phòng ban / nhà máy'],
       ['users', '1 = 1', nd.users, nd.users, 'CBCNV'],
     ];
     for (const [table, where, counted, keep, label] of checks) {
@@ -116,7 +124,10 @@ function syncDirectory(db, dir, opts = {}) {
         continue;
       }
       const ids = keep.map((r) => r.id);
-      db.run(`UPDATE ${table} SET active = 0 WHERE active = 1 AND sso_id NOT IN (${ids.map(() => '?').join(',')})`, ...ids);
+      const notIn = `sso_id NOT IN (${ids.map(() => '?').join(',')})`;
+      db.run(`UPDATE ${table} SET active = 0 WHERE active = 1 AND ${notIn}`, ...ids);
+      // Người đã rời SSO: bỏ luôn phân công phòng ban (không còn là nhân sự kho nào)
+      if (table === 'users') db.run(`DELETE FROM user_departments WHERE user_id IN (SELECT id FROM users WHERE ${notIn})`, ...ids);
     }
 
     // Kho: tên theo đơn vị SSO; kho của bản trước chưa gắn đơn vị thì tự gắn khi tên khớp

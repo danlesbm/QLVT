@@ -36,6 +36,8 @@ test('tách họ tên khỏi chức danh trong tên SSO (giống Payroll)', () =
     ['Chủ tịch HĐQT_Vũ Minh Tú', 'Hội đồng quản trị', 'Vũ Minh Tú'],
     ['Thành viên BKS_Nguyễn Văn Minh', 'Ban Kiểm Soát', 'Nguyễn Văn Minh'],
     ['Kế toán trưởng - Lê Thị Hoa', 'Trưởng phòng', 'Lê Thị Hoa'],
+    ['GĐ - Nguyễn Văn A', '', 'Nguyễn Văn A'],
+    ['PGĐ_Trần Văn B', 'Người phụ trách', 'Trần Văn B'],
   ];
   for (const [raw, pos, want] of cases) assert.equal(cleanName(raw, pos), want, raw);
 });
@@ -174,6 +176,68 @@ test('import tồn kho không tự tạo kho: mã kho chưa có thì từ chối
   assert.equal(db.one(`SELECT warehouse_code FROM factories WHERE code = 'SS3'`).warehouse_code, 'KHOSS3');
 });
 
+test('phòng ban chỉ còn trong phân công không đổi tên kho thành mã số; SSO trả về thiếu phòng ban thì không ngưng', () => {
+  const { db, fid } = demo();
+  const dir = clone(directory);
+  dir.departments = dir.departments.filter((d) => d.id !== '15'); // Thoong Gót bị bỏ khỏi danh sách nhưng còn phân công
+  const r = syncDirectory(db, dir);
+  const tg = db.one('SELECT * FROM factories WHERE id = ?', fid('TG'));
+  assert.equal(tg.name, 'NMTĐ Thoong Gót');
+  assert.equal(tg.warehouse_name, 'Kho NMTĐ Thoong Gót');
+  assert.ok(r.warnings.some((w) => w.includes('NMTĐ Thoong Gót')), 'báo đơn vị có kho không còn trên SSO');
+  // Danh sách phòng ban rỗng: giữ nguyên tên, không ngưng phòng ban nào
+  const empty = clone(directory);
+  empty.departments = [];
+  const r2 = syncDirectory(db, empty);
+  assert.ok(r2.warnings.some((w) => w.includes('phòng ban / nhà máy')));
+  assert.equal(db.one(`SELECT name FROM factories WHERE code = 'TACO'`).name, 'NMTĐ Tà Cọ');
+  assert.equal(db.one(`SELECT active FROM departments WHERE name = 'Phòng Kế toán'`).active, 1);
+});
+
+test('nhân sự nghỉ / vào mới liên tục vẫn cập nhật phân công (người nghỉ không còn tính)', () => {
+  const { db, access, fid } = demo();
+  const dir = clone(directory);
+  for (let round = 0; round < 12; round++) {
+    const leave = dir.users.filter((u) => /^w/.test(u.id)).slice(0, 3).map((u) => u.id);
+    dir.users = dir.users.filter((u) => !leave.includes(u.id));
+    dir.assignments = dir.assignments.filter((a) => !leave.includes(a.userId));
+    for (let i = 0; i < 3; i++) {
+      const id = `w${round}-${i}`;
+      dir.users.push({ id, name: `Công Nhân ${round}${i} - NVVH NMTĐ Tà Cọ` });
+      dir.assignments.push({ userId: id, deptId: '11', role: 'Nhân viên' });
+    }
+    const r = syncDirectory(db, dir);
+    assert.ok(!r.warnings.some((w) => w.includes('phân công')), `vòng ${round}: ${r.warnings}`);
+  }
+  dir.assignments.find((x) => x.userId === 'nv102').deptId = '12';
+  syncDirectory(db, dir);
+  assert.equal(can(access('nv102'), 'stock.edit', fid('TACO')), false, 'chuyển nhà máy thì mất quyền thủ kho ở nhà máy cũ');
+});
+
+test('tích kho: tên gần giống không lấy nhầm mã kho cũ của nhà máy khác', () => {
+  const db = open(':memory:');
+  const dir = { users: [], assignments: [], departments: [{ id: 'a', name: 'NMTĐ Suối Sập 2' }, { id: 'b', name: 'NMTĐ Suối Sập 3' }, { id: 'c', name: 'NMTĐ Nậm Chiến 3' }] };
+  syncDirectory(db, dir);
+  const ids = db.all('SELECT id FROM departments ORDER BY name').map((d) => d.id);
+  db.tx(() => plants.setWarehouseUnits(db, ids, ids));
+  const code = (n) => db.one('SELECT f.code, f.warehouse_code FROM factories f JOIN departments d ON d.id = f.department_id WHERE d.name = ?', n);
+  assert.deepEqual({ ...code('NMTĐ Suối Sập 3') }, { code: 'SS3', warehouse_code: 'KHOSS3' });
+  assert.notEqual(code('NMTĐ Suối Sập 2').warehouse_code, 'KHOSS3');
+  assert.notEqual(code('NMTĐ Nậm Chiến 3').warehouse_code, 'KHONC3');
+  assert.notEqual(code('NMTĐ Nậm Chiến 3').code, 'NC3', 'mã NC3 để dành cho Nậm Công 3');
+});
+
+test('tích kho: kho cũ khớp tên nhiều đơn vị thì không bị đơn vị khác lấy mất', () => {
+  const db = open(':memory:');
+  db.run(`INSERT INTO factories (code, name, warehouse_code) VALUES ('TACO', 'Kho cũ Tà Cọ', 'KHOTACO')`);
+  syncDirectory(db, { users: [], assignments: [], departments: [{ id: 'a', name: 'NMTĐ Tà Cọ' }, { id: 'b', name: 'Nhà máy Tà Cọ' }] });
+  assert.equal(db.one(`SELECT department_id FROM factories WHERE code = 'TACO'`).department_id, null, 'mơ hồ thì không tự gắn');
+  const b = db.one(`SELECT id FROM departments WHERE sso_id = 'b'`).id;
+  db.tx(() => plants.setWarehouseUnits(db, [b], [b]));
+  assert.equal(db.one(`SELECT department_id FROM factories WHERE code = 'TACO'`).department_id, null, 'kho cũ vẫn chờ quản trị chọn');
+  assert.notEqual(db.one('SELECT warehouse_code FROM factories WHERE department_id = ?', b).warehouse_code, 'KHOTACO');
+});
+
 // ---------------------------------------------------------------- qua HTTP
 
 let server;
@@ -267,4 +331,32 @@ test('trang cài đặt: tích đơn vị có kho', async () => {
   const tk = await login('nv102');
   assert.equal((await tk('/cai-dat/don-vi-co-kho', `shown=${kt}&kho=${kt}`)).status, 403);
   assert.equal(hdb.one('SELECT active FROM factories WHERE department_id = ?', kt).active, 0);
+});
+
+test('gắn kho cũ (đang giữ tồn) vào đơn vị đã lỡ tích tạo kho mới', async () => {
+  const admin = await login('nv900');
+  const kt = id(`SELECT id FROM departments WHERE name = 'Phòng Kế toán'`);
+  const legacy = Number(hdb.run(`INSERT INTO factories (code, name, warehouse_code, warehouse_name) VALUES ('CUKT', 'Kho cũ kế toán', 'KHOCUKT', 'Kho cũ kế toán')`).lastInsertRowid);
+  hdb.run(`INSERT INTO materials (code, name) VALUES ('KT-01', 'Giấy in')`);
+  hdb.run(`INSERT INTO stock (factory_id, material_id, quantity) VALUES (?, (SELECT id FROM materials WHERE code = 'KT-01'), 5)`, legacy);
+  // Đã lỡ tích Phòng Kế toán (tạo kho trống) rồi bỏ tích
+  hdb.tx(() => plants.setWarehouseUnits(hdb, [kt], [kt]));
+  hdb.tx(() => plants.setWarehouseUnits(hdb, [kt], []));
+  const page = await (await admin(`/cai-dat/nha-may/${legacy}`)).text();
+  assert.match(page, new RegExp(`<option value="${kt}"[^>]*>Phòng Kế toán`), 'đơn vị có kho trống đã ngưng vẫn chọn được');
+  await admin('/cai-dat/nha-may', { id: String(legacy), department_id: String(kt), code: 'CUKT', warehouse_code: 'KHOCUKT', warehouse_name: 'Kho cũ kế toán', active: '1' });
+  const f = hdb.one('SELECT * FROM factories WHERE id = ?', legacy);
+  assert.equal(f.department_id, kt);
+  assert.equal(f.name, 'Phòng Kế toán');
+  assert.equal(f.warehouse_name, 'Kho cũ kế toán', 'tên in trên phiếu do quản trị tự đặt thì giữ');
+  assert.equal(hdb.one('SELECT COUNT(*) n FROM factories WHERE department_id = ?', kt).n, 1, 'kho trống đã bị xóa');
+  // Đổi đơn vị: tên in trên phiếu đang theo tên đơn vị cũ thì đổi theo
+  hdb.run(`UPDATE factories SET warehouse_name = 'Kho Phòng Kế toán' WHERE id = ?`, legacy);
+  const vp = id(`SELECT id FROM departments WHERE name = 'Văn phòng'`);
+  await admin('/cai-dat/nha-may', { id: String(legacy), department_id: String(vp), code: 'CUKT', warehouse_name: 'Kho Phòng Kế toán', active: '1' });
+  assert.equal(hdb.one('SELECT warehouse_name FROM factories WHERE id = ?', legacy).warehouse_name, 'Kho Văn phòng');
+  // Đơn vị có kho đang dùng thì không gắn kho khác vào được
+  const taco = hdb.one(`SELECT * FROM factories WHERE code = 'TACO'`);
+  await admin('/cai-dat/nha-may', { id: String(legacy), department_id: String(taco.department_id), code: 'CUKT', active: '1' });
+  assert.equal(hdb.one('SELECT department_id FROM factories WHERE id = ?', legacy).department_id, vp);
 });

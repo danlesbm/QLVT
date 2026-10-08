@@ -4,7 +4,7 @@
   <div class="col-lg-7">
     <div class="card mb-3"><div class="card-body">
       <h2 class="h5 mb-1"><%= u.full_name %></h2>
-      <div class="text-muted small"><%= [u.position_name, u.department_name, u.email].filter(Boolean).join(' · ') %> · Mã SSO: <%= u.sso_id %><% if (u.sso_admin) { %> · <span class="badge text-bg-dark">Quản trị trên SSO</span><% } %></div>
+      <div class="text-muted small"><%= [u.position_name, u.department_name, u.email].filter(Boolean).join(' · ') %> · Mã SSO: <%= u.sso_id %><% if (u.admin && !u.is_admin) { %> · <span class="badge text-bg-dark">Quản trị (theo quyền quản trị trên SSO)</span><% } %></div>
       <% if (units.length) { %><div class="small mt-2">Đơn vị trên SSO:
         <% units.forEach((x, i) => { %><%= i ? ', ' : '' %><span class="<%= x.member ? '' : 'text-muted' %>"><%= x.name %><%= x.role ? ' (' + x.role + ')' : '' %><% if (x.member && x.factory_name) { %> <span class="badge text-bg-success fw-normal">nhân sự kho <%= x.factory_name %></span><% } %></span><% }) %>
       </div><% } %>
@@ -18,7 +18,8 @@
     </div>
     <% if (isAdmin && u.id !== user.id) { %>
     <form method="post" action="/cai-dat/nguoi-dung/<%= u.id %>/quan-tri" class="mt-3" data-confirm="Xác nhận thay đổi quyền quản trị hệ thống?"><input type="hidden" name="_csrf" value="<%= csrf %>"><input type="hidden" name="is_admin" value="<%= u.is_admin ? 0 : 1 %>">
-      <button class="btn btn-sm btn-outline-dark"><%= u.is_admin ? 'Bỏ quyền quản trị hệ thống' : 'Cấp quyền quản trị hệ thống (toàn quyền)' %></button></form>
+      <button class="btn btn-sm btn-outline-dark"><%= u.is_admin ? 'Bỏ quyền quản trị hệ thống' : 'Cấp quyền quản trị hệ thống (toàn quyền)' %></button>
+      <% if (u.admin && !u.is_admin) { %><span class="small text-muted ms-2">Đang là quản trị do là quản trị trên SSO; bỏ quyền quản trị trên SSO thì lần đăng nhập sau mất quyền.</span><% } %></form>
     <% } %>
   </div>
   <div class="col-lg-5">
