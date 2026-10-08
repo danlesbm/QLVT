@@ -241,12 +241,14 @@ test('đồng bộ SSO không ngưng hoạt động hàng loạt khi danh bạ t
   const { db } = setup();
   const before = db.one('SELECT COUNT(*) n FROM users WHERE active = 1').n;
   assert.ok(before > 5);
-  const r1 = syncDirectory(db, { departments: [], positions: [], employees: [] });
+  const r1 = syncDirectory(db, { users: [], departments: [], assignments: [] });
   assert.equal(db.one('SELECT COUNT(*) n FROM users WHERE active = 1').n, before, 'danh bạ rỗng thì không ngưng ai');
   assert.equal(r1.warnings.length, 3);
-  const r2 = syncDirectory(db, { departments: [], positions: [], employees: [{ id: 'nv101', username: 'nv101', full_name: 'Lò Văn Thiêm' }] });
+  const r2 = syncDirectory(db, { users: [{ id: 'nv101', username: 'nv101', name: 'Lò Văn Thiêm - NVVH NMTĐ Tà Cọ' }], departments: [], assignments: [] });
   assert.equal(db.one('SELECT COUNT(*) n FROM users WHERE active = 1').n, before, 'trả về quá ít cũng không ngưng');
   assert.ok(r2.warnings.some((w) => w.includes('CBCNV')));
+  assert.ok(r2.warnings.some((w) => w.includes('phân công')), 'thiếu phân công thì giữ nguyên đơn vị');
+  assert.ok(db.one(`SELECT 1 FROM user_departments ud JOIN users u ON u.id = ud.user_id WHERE u.sso_id = 'nv101'`), 'vẫn là nhân sự Tà Cọ');
   assert.equal(db.one(`SELECT full_name FROM users WHERE sso_id = 'nv101'`).full_name, 'Lò Văn Thiêm', 'vẫn cập nhật hồ sơ');
 });
 
@@ -466,10 +468,12 @@ test('form lỗi quyền không hiện lại tồn kho của nhà máy khác', a
 
 test('mã nhà máy / mã kho trùng nhau khác hoa thường bị từ chối', async () => {
   const admin = await login('nv900');
-  await admin('/cai-dat/nha-may', { code: 'taco', name: 'Trùng mã', warehouse_code: 'KHOMOI' });
-  await admin('/cai-dat/nha-may', { code: 'MOI', name: 'Trùng mã kho', warehouse_code: 'khotaco' });
+  const nc3 = String(hdb.one(`SELECT id FROM factories WHERE code = 'NC3'`).id);
+  await admin('/cai-dat/nha-may', { id: nc3, code: 'taco', warehouse_code: 'KHOMOI' });
+  await admin('/cai-dat/nha-may', { id: nc3, code: 'MOI', warehouse_code: 'khotaco' });
   assert.equal(hdb.one(`SELECT COUNT(*) n FROM factories WHERE upper(code) = 'TACO'`).n, 1);
   assert.equal(hdb.one(`SELECT COUNT(*) n FROM factories WHERE upper(warehouse_code) = 'KHOTACO'`).n, 1);
+  assert.equal(hdb.one(`SELECT code FROM factories WHERE id = ?`, Number(nc3)).code, 'NC3');
 });
 
 test('sửa mã riêng của nhà máy đã ngưng hoạt động vẫn giữ là mã riêng', async () => {

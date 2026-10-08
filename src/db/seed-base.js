@@ -1,18 +1,6 @@
 'use strict';
 const { DEFAULT_ROLES } = require('../auth/permissions');
 
-/**
- * 5 nhà máy / kho lấy theo mã kho trong file tồn kho của phần mềm cũ.
- * Tên các nhà máy chưa rõ có thể sửa trong Cài đặt > Nhà máy.
- */
-const FACTORIES = [
-  { code: 'TACO', name: 'NMTĐ Tà Cọ', warehouse_code: 'KHOTACO', request_prefix: 'PNC-TC-SBM' },
-  { code: 'NC3', name: 'NMTĐ Nậm Công 3', warehouse_code: 'KHONC3', request_prefix: 'PNC-NC3-SBM' },
-  { code: 'NATAU', name: 'NMTĐ Nậm Tàu', warehouse_code: 'KHONATAU', request_prefix: 'PNC-NT-SBM' },
-  { code: 'SS3', name: 'NMTĐ SS3', warehouse_code: 'KHOSS3', request_prefix: 'PNC-SS3-SBM' },
-  { code: 'TG', name: 'NMTĐ TG', warehouse_code: 'KHOTG', request_prefix: 'PNC-TG-SBM' },
-];
-
 const SETTINGS = {
   company_name: 'CÔNG TY CỔ PHẦN ĐẦU TƯ PHÁT TRIỂN BẮC MINH',
   company_name_en: 'BAC MINH DEVELOPMENT INVESTMENT JOINT STOCK COMPANY',
@@ -30,6 +18,7 @@ const SETTINGS = {
   max_quoters: '3',
 };
 
+/** Cài đặt và nhóm quyền mặc định. Kho không tạo sẵn: quản trị tích đơn vị SSO nào có kho trong Cài đặt. */
 function seedBase(db) {
   // Cài đặt mới bổ sung ở các phiên bản sau cũng được thêm vào CSDL đang dùng
   const s = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
@@ -39,9 +28,7 @@ function seedBase(db) {
   db.exec('BEGIN');
   const r = db.prepare('INSERT INTO roles (name, description, permissions) VALUES (?, ?, ?)');
   for (const role of DEFAULT_ROLES) r.run(role.name, role.description, JSON.stringify(role.permissions));
-  const f = db.prepare('INSERT OR IGNORE INTO factories (code, name, warehouse_code, warehouse_name, request_prefix, sort) VALUES (?, ?, ?, ?, ?, ?)');
-  FACTORIES.forEach((x, i) => f.run(x.code, x.name, x.warehouse_code, `Kho ${x.name}`, x.request_prefix, i + 1));
   db.exec('COMMIT');
 }
 
-module.exports = { seedBase, FACTORIES };
+module.exports = { seedBase };

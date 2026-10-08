@@ -1,25 +1,64 @@
 <%- include('../partials/head') %>
 <%- include('nav') %>
-<div class="card" style="max-width:900px"><div class="card-body">
-  <form method="post" action="/cai-dat/nha-may"><input type="hidden" name="_csrf" value="<%= csrf %>"><input type="hidden" name="id" value="<%= row.id || '' %>">
+<% const edit = can('admin.settings'); %>
+<div class="card mb-3" style="max-width:1000px"><div class="card-header">Thông tin kho</div><div class="card-body">
+  <form method="post" action="/cai-dat/nha-may"><input type="hidden" name="_csrf" value="<%= csrf %>"><input type="hidden" name="id" value="<%= row.id %>">
+    <fieldset <%= edit ? '' : 'disabled' %>>
     <div class="row g-3">
-      <div class="col-md-3"><label class="form-label">Mã <span class="text-danger">*</span></label><input name="code" class="form-control" value="<%= row.code || '' %>" required></div>
-      <div class="col-md-6"><label class="form-label">Tên nhà máy <span class="text-danger">*</span></label><input name="name" class="form-control" value="<%= row.name || '' %>" required></div>
+      <div class="col-md-6"><label class="form-label">Đơn vị (SSO) <span class="text-danger">*</span></label>
+        <select name="department_id" class="form-select"><% if (!unit) { %><option value="">-- chọn đơn vị trên SSO --</option><% } %>
+          <% units.forEach(d => { %><option value="<%= d.id %>" <%= d.id === row.department_id ? 'selected' : '' %>><%= d.name %><%= d.active ? '' : ' (không còn trên SSO)' %></option><% }) %></select>
+        <div class="form-text">Tên kho lấy theo tên đơn vị trên SSO: <b><%= row.name %></b>.</div></div>
+      <% if (!unit) { %><div class="col-md-6"><label class="form-label">Tên kho (khi chưa gắn đơn vị)</label><input name="name" class="form-control" value="<%= row.name %>"></div><% } %>
+      <div class="col-md-3"><label class="form-label">Mã kho <span class="text-danger">*</span></label><input name="code" class="form-control" value="<%= row.code %>" required></div>
       <div class="col-md-3"><label class="form-label">Thứ tự</label><input name="sort" type="number" class="form-control" value="<%= row.sort || 0 %>"></div>
-      <div class="col-md-3"><label class="form-label">Mã kho (phần mềm cũ)</label><input name="warehouse_code" class="form-control" value="<%= row.warehouse_code || '' %>"></div>
-      <div class="col-md-5"><label class="form-label">Tên kho</label><input name="warehouse_name" class="form-control" value="<%= row.warehouse_name || '' %>"></div>
+      <div class="col-md-3"><label class="form-label">Mã kho (phần mềm cũ)</label><input name="warehouse_code" class="form-control" value="<%= row.warehouse_code || '' %>"><div class="form-text">Dùng khi import tồn kho cũ.</div></div>
+      <div class="col-md-5"><label class="form-label">Tên kho in trên phiếu</label><input name="warehouse_name" class="form-control" value="<%= row.warehouse_name || '' %>"></div>
       <div class="col-md-4"><label class="form-label">Ký hiệu số phiếu nhu cầu</label><input name="request_prefix" class="form-control" value="<%= row.request_prefix || '' %>" placeholder="PNC-TC&NC3-SBM"><div class="form-text">Số phiếu: 32/<%= row.request_prefix || '...' %></div></div>
       <div class="col-md-8"><label class="form-label">Địa chỉ / địa điểm</label><input name="address" class="form-control" value="<%= row.address || '' %>"></div>
       <div class="col-md-4"><label class="form-label">GĐ/PGĐ phụ trách duyệt nhu cầu</label>
         <select name="director_id" class="form-select"><option value="">-- chưa phân công --</option>
           <% directors.forEach(d => { %><option value="<%= d.id %>" <%= d.id === row.director_id ? 'selected' : '' %>><%= d.full_name %></option><% }) %></select></div>
-      <div class="col-12"><label class="form-label">Bộ phận (từ SSO) thuộc nhà máy này</label>
+      <div class="col-12"><label class="form-label">Bộ phận SSO khác có nhân sự thuộc kho này</label>
+        <div class="form-text mt-0 mb-1">Chỉ cần khi trên SSO nhà máy được chia thành nhiều bộ phận (tổ, đội...). Nhân sự các bộ phận này cũng được chọn làm thủ kho, GĐ nhà máy, người tổng hợp đề xuất.</div>
         <div class="row row-cols-md-3 g-1 small">
-          <% departments.forEach(d => { %><div class="form-check"><input class="form-check-input" type="checkbox" name="departments" value="<%= d.id %>" id="d<%= d.id %>" <%= row.id && d.factory_id === row.id ? 'checked' : '' %>><label class="form-check-label" for="d<%= d.id %>"><%= d.name %><% if (d.factory_name && d.factory_id !== row.id) { %> <span class="text-muted">(<%= d.factory_name %>)</span><% } %></label></div><% }) %>
+          <% departments.forEach(d => { %><div class="form-check"><input class="form-check-input" type="checkbox" name="departments" value="<%= d.id %>" id="d<%= d.id %>" <%= d.factory_id === row.id ? 'checked' : '' %>><label class="form-check-label" for="d<%= d.id %>"><%= d.name %><% if (d.factory_name && d.factory_id !== row.id) { %> <span class="text-muted">(<%= d.factory_name %>)</span><% } %></label></div><% }) %>
         </div></div>
       <div class="col-12"><div class="form-check"><input class="form-check-input" type="checkbox" name="active" value="1" id="ac" <%= row.active ? 'checked' : '' %>><label for="ac" class="form-check-label">Đang hoạt động</label></div></div>
     </div>
-    <div class="mt-3 d-flex gap-2"><button class="btn btn-primary"><i class="bi bi-save"></i> Lưu</button><a href="/cai-dat" class="btn btn-outline-secondary">Hủy</a></div>
+    </fieldset>
+    <% if (edit) { %><div class="mt-3 d-flex gap-2"><button class="btn btn-primary"><i class="bi bi-save"></i> Lưu</button><a href="/cai-dat" class="btn btn-outline-secondary">Quay lại</a></div><% } %>
   </form>
 </div></div>
+
+<div class="card" style="max-width:1000px" id="nhan-su"><div class="card-header">Nhân sự kho <span class="text-muted small">· người thuộc <%= unit ? unit.name : 'đơn vị của kho' %> trên SSO</span></div>
+  <% if (!can('admin.permissions')) { %>
+    <div class="card-body text-muted">Cần quyền "Phân quyền người dùng" để phân công nhân sự kho.</div>
+  <% } else if (!members.length) { %>
+    <div class="card-body text-muted">Chưa có nhân sự: <%= unit ? 'đơn vị này chưa có ai trên SSO (bấm "Đồng bộ ngay" ở trang Cài đặt nếu vừa thêm người).' : 'chọn đơn vị SSO của kho trước.' %></div>
+  <% } else { %>
+  <form method="post" action="/cai-dat/nha-may/<%= row.id %>/nhan-su"><input type="hidden" name="_csrf" value="<%= csrf %>">
+    <input type="hidden" name="shown_users" value="<%= members.map(m => m.id).join(',') %>">
+    <input type="hidden" name="shown_roles" value="<%= roles.map(x => x.id).join(',') %>">
+    <div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0">
+      <thead><tr><th>Họ tên</th><th>Chức vụ (SSO)</th><% roles.forEach(x => { %><th class="text-center small" title="<%= x.description || '' %>"><%= x.name %></th><% }) %></tr></thead>
+      <tbody><% members.forEach(m => { %><tr>
+        <td><a href="/cai-dat/nguoi-dung/<%= m.id %>"><%= m.full_name %></a></td><td class="small text-muted"><%= m.roles || '' %></td>
+        <% roles.forEach(x => { const k = m.id + ':' + x.id; %><td class="text-center"><input class="form-check-input" type="checkbox" name="g" value="<%= k %>" <%= granted.has(k) ? 'checked' : '' %> aria-label="<%= x.name %> - <%= m.full_name %>"></td><% }) %>
+      </tr><% }) %></tbody>
+    </table></div>
+    <div class="card-body"><button class="btn btn-primary btn-sm"><i class="bi bi-save"></i> Lưu nhân sự kho</button>
+      <span class="small text-muted ms-2">Chỉ người thuộc đơn vị của kho mới chọn được. Các quyền khác (duyệt, kiểm soát, mua sắm, đánh mã, xem) gán ở Người dùng & phân quyền.</span></div>
+  </form>
+  <% } %>
+  <% if (can('admin.permissions') && stale.length) { %>
+  <div class="card-body border-top">
+    <div class="small fw-semibold text-warning-emphasis mb-1">Quyền không còn hiệu lực (người đã không thuộc đơn vị của kho trên SSO)</div>
+    <% stale.forEach(g => { %><form method="post" action="/cai-dat/nha-may/<%= row.id %>/bo/<%= g.id %>" class="d-flex gap-2 align-items-center small text-muted"><input type="hidden" name="_csrf" value="<%= csrf %>"><span><%= g.full_name %> · <%= g.role_name %></span><button class="btn btn-sm btn-link text-danger p-0">Bỏ</button></form><% }) %>
+  </div>
+  <% } %>
+  <% if (companyWide.length) { %>
+  <div class="card-body border-top small text-muted">Có quyền vận hành ở mọi kho (gán toàn công ty): <%= companyWide.map(g => g.full_name + ' (' + g.role_name + ')').join(', ') %>.</div>
+  <% } %>
+</div>
 <%- include('../partials/foot') %>

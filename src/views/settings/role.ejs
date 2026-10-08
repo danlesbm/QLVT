@@ -10,7 +10,7 @@
       <h3 class="h6 mt-3"><%= g %></h3>
       <% PERMISSIONS.filter(p => p.group === g).forEach(p => { %>
         <div class="form-check"><input class="form-check-input" type="checkbox" name="perms" value="<%= p.code %>" id="<%= p.code %>" <%= perms.has(p.code) ? 'checked' : '' %>>
-          <label class="form-check-label" for="<%= p.code %>"><%= p.label %> <% if (p.scoped) { %><span class="badge text-bg-info fw-normal">theo nhà máy</span><% } %></label></div>
+          <label class="form-check-label" for="<%= p.code %>"><%= p.label %> <% if (p.scoped) { %><span class="badge text-bg-info fw-normal">theo kho</span><% } %><% if (p.plant) { %> <span class="badge text-bg-success fw-normal">chỉ nhân sự của kho</span><% } %></label></div>
       <% }) %>
     <% }) %>
     <div class="mt-4 d-flex gap-2"><button class="btn btn-primary"><i class="bi bi-save"></i> Lưu</button><a href="/cai-dat/nhom-quyen" class="btn btn-outline-secondary">Hủy</a></div>

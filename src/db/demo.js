@@ -1,6 +1,7 @@
 'use strict';
 const directory = require('../sso/mock-directory');
 const { syncDirectory } = require('../sso/sync');
+const { setWarehouseUnits } = require('../services/plants');
 
 /** Phân quyền mẫu cho danh bạ SSO giả lập (dùng cho demo và kiểm thử). */
 const ASSIGN = [
@@ -22,7 +23,10 @@ const ASSIGN = [
 ];
 
 function seedDemo(db, { admin = 'nv900' } = {}) {
-  syncDirectory(db, directory, admin ? [admin] : []);
+  syncDirectory(db, directory, { adminSsoIds: admin ? [admin] : [] });
+  // 5 nhà máy trong danh bạ mẫu là đơn vị có kho
+  const plants = db.all(`SELECT id FROM departments WHERE name LIKE 'NMTĐ %' ORDER BY CAST(sso_id AS INTEGER)`).map((d) => d.id);
+  db.tx(() => setWarehouseUnits(db, plants, plants));
   const uid = (sso) => db.one('SELECT id FROM users WHERE sso_id = ?', sso).id;
   const rid = (name) => db.one('SELECT id FROM roles WHERE name = ?', name).id;
   const fid = (code) => (code ? db.one('SELECT id FROM factories WHERE code = ?', code).id : null);

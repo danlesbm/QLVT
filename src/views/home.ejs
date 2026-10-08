@@ -1,4 +1,7 @@
 <%- include('partials/head') %>
+<% if (!factories.length && can('admin.settings')) { %>
+<div class="alert alert-info"><i class="bi bi-info-circle me-1"></i>Chưa có kho nào. Vào <a href="/cai-dat">Cài đặt › Đơn vị có kho</a> để tích các đơn vị (nhà máy) có kho trong danh sách lấy từ SSO.</div>
+<% } %>
 <div class="row g-3 mb-3">
   <% [
     ['clipboard-check', 'Phiếu đề xuất đang xử lý', stats.inProgress, '#e7f0fa', '#1f4e79', '/de-xuat?status=DANG_XU_LY'],

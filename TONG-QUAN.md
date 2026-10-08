@@ -2,12 +2,13 @@
 
 _Cập nhật: 07/10/2026_
 
-Phần mềm quản lý vật tư cho Công ty CP Đầu tư Phát triển Bắc Minh (SBM): 5 kho vật tư ở 5 nhà máy, quy trình đề xuất – duyệt – báo giá – mua sắm – nhận hàng, phiếu xuất kho BM.06. Ứng dụng nằm trong hệ sinh thái SSO giống app Payroll: đăng nhập SSO, danh sách CBCNV / bộ phận / chức vụ lấy từ SSO.
+Phần mềm quản lý vật tư cho Công ty CP Đầu tư Phát triển Bắc Minh (SBM): 5 kho vật tư ở 5 nhà máy, quy trình đề xuất – duyệt – báo giá – mua sắm – nhận hàng, phiếu xuất kho BM.06. Ứng dụng nằm trong hệ sinh thái SSO giống app Payroll: mở từ SSO Portal là vào được, danh sách CBCNV / phòng ban / nhà máy / chức vụ lấy từ SSO; quản trị chỉ cần tích đơn vị nào có kho.
 
 ## 1. Yêu cầu (tóm tắt từ người dùng)
 
 - 5 kho ở 5 nhà máy. Dữ liệu tồn kho hiện có xuất từ phần mềm cũ (file `ton-kho-2026.xlsx`: 3.760 dòng, kho KHOTACO, KHONATAU, KHOSS3, KHOTG, KHONC3).
 - SSO cung cấp CBCNV, bộ phận, chức vụ; chỉ cần đăng nhập SSO là dùng được.
+- Đồng bộ mọi phòng ban, nhà máy từ SSO; quản trị **tích đơn vị nào có kho**. Tên nhà máy lấy từ SSO. Thủ kho, quản lý nhà máy chỉ chọn trong nhân sự của chính nhà máy đó; các phòng ban khác chỉ dùng để cấu hình duyệt, kiểm soát, mua sắm, đánh mã hoặc xem vật tư các kho.
 - Quy trình phiếu đề xuất vật tư:
   1. Mỗi nhà máy có 1–2 người tổng hợp lập đề xuất.
   2. Giám đốc nhà máy xem xét → **Chờ Trưởng bộ phận xem xét**.
@@ -32,15 +33,15 @@ Phần mềm quản lý vật tư cho Công ty CP Đầu tư Phát triển Bắc
 | CSDL | SQLite (`node:sqlite` có sẵn trong Node, không cần cài thêm) | 5 nhà máy, vài chục người dùng: đủ nhanh, sao lưu bằng 1 lệnh (`npm run backup`) |
 | Giao diện | EJS render phía máy chủ + Bootstrap 5 | Không cần build, chạy tốt trên máy văn phòng |
 | Excel | ExcelJS | Xuất phiếu theo mẫu, đọc file tồn kho cũ |
-| SSO | Adapter OIDC + chế độ giả lập | Xem mục 4 |
+| SSO | SSO Portal của công ty (cùng giao thức với app Payroll) + chế độ giả lập | Xem mục 4 |
 
-Repo SSO và Payroll trên GitHub hiện gần như rỗng nên chưa có mẫu giao tiếp để bám theo. Phần SSO được viết thành adapter riêng (`src/sso/`), khi có tài liệu API của SSO chỉ cần sửa adapter, không đụng nghiệp vụ.
+Phần SSO (`src/sso/`) bám đúng cách app Payroll (repo `danlesbm/Payroll`) đang giao tiếp với SSO Portal: xác thực token qua `introspect`, đọc danh bạ qua API nội bộ, tách họ tên khỏi chức danh trong tên SSO cùng quy tắc với Payroll.
 
 ## 3. Chức năng đã làm
 
 ### Phiếu đề xuất vật tư (`/de-xuat`)
 - Lập phiếu nhiều dòng; gõ tên để tìm mã vật tư (hiện tồn kho tại nhà máy), vẫn đề xuất được vật tư chưa có mã.
-- Số phiếu tự động theo nhà máy/năm: `32/PNC-TC&NC3-SBM` (ký hiệu chỉnh trong Cài đặt > Nhà máy).
+- Số phiếu tự động theo nhà máy/năm: `32/PNC-TC&NC3-SBM` (ký hiệu chỉnh trong Cài đặt › kho).
 - 15 trạng thái đúng quy trình, thanh tiến trình, nút xử lý chỉ hiện với người có quyền ở bước đó.
 - Từ chối bắt buộc lý do: ở các bước duyệt nhu cầu → trả về người lập sửa và trình lại (giữ số phiếu); GĐ từ chối giá → về bước tổng hợp; nhà máy từ chối hàng → về Đang mua sắm.
 - PKT (người được giao hoặc TP) được điều chỉnh danh sách vật tư, có ghi lịch sử.
@@ -63,40 +64,44 @@ Repo SSO và Payroll trên GitHub hiện gần như rỗng nên chưa có mẫu 
 - **Import file tồn kho của phần mềm cũ** (giao diện hoặc lệnh), chuẩn hóa đơn vị CAI/BO/... thành Cái/Bộ/...
 - Danh mục mã: mã chung toàn công ty hoặc riêng từng nhà máy; nhóm mã theo tiền tố; nút **gợi ý mã tiếp theo** (vd `1-01-00-00-02-02` → `...-007`).
 
-### Phân quyền (`/cai-dat`)
-- 20 quyền chi tiết chia nhóm; quyền theo nhà máy hoặc toàn công ty.
+### Đơn vị có kho và phân quyền (`/cai-dat`)
+- **Đơn vị có kho**: bảng mọi phòng ban, nhà máy lấy từ SSO (kèm số nhân sự); tích đơn vị nào có kho thì đơn vị đó có kho, bỏ tích là ngưng kho (dữ liệu vẫn giữ, tích lại là dùng tiếp). HĐQT / Ban kiểm soát / Ban giám đốc trên SSO là đơn vị ảo, không có kho.
+- Tên kho luôn theo tên đơn vị trên SSO (đổi tên trên SSO thì lần đồng bộ sau đổi theo). Đơn vị trùng tên nhà máy cũ (Tà Cọ, Nậm Công 3, Nà Tẩu, Suối Sập 3, Thoong Gót) tự lấy lại mã kho cũ (KHOTACO...) và ký hiệu số phiếu; đơn vị khác được đặt mã theo chữ đầu (vd Phòng Kế hoạch → PKH).
+- **Nhân sự kho**: trang của từng kho liệt kê đúng người thuộc đơn vị đó trên SSO, tích ai là Thủ kho / GĐ nhà máy / Người tổng hợp đề xuất. "Người phụ trách" trên SSO (vd PGĐ công ty phụ trách nhà máy) không tính là nhân sự nhà máy. Nếu nhà máy chia nhiều bộ phận trên SSO thì gắn thêm bộ phận vào kho.
+- Nhóm quyền có quyền vận hành kho (lập phiếu, GĐ nhà máy duyệt, nhận hàng, nhập/điều chỉnh kho, lập/duyệt phiếu xuất) gán theo kho chỉ cho người thuộc kho đó: gán cho người ngoài bị từ chối kèm lý do; người chuyển đơn vị trên SSO thì quyền ở kho cũ tự hết hiệu lực (hiện mờ, có nút bỏ). Gán toàn công ty thì không giới hạn (người của công ty nhập cho tất cả). Quyền duyệt, kiểm soát, mua sắm, đánh mã, xem gán cho người ở bất kỳ phòng ban nào.
+- 20 quyền chi tiết chia nhóm; quyền theo kho hoặc toàn công ty.
 - 10 nhóm quyền mặc định (Người tổng hợp đề xuất, GĐ nhà máy, Thủ kho, Người đánh mã, TP/CB Kỹ thuật, Ban Giám đốc, TP/NV Kế hoạch, Người xem); tạo/sửa nhóm tùy ý.
 - Gán nhóm quyền cho người dùng theo từng nhà máy; quyền quản trị toàn hệ thống.
-- Cài đặt thông tin công ty in trên phiếu, dòng "Kính gửi" và "Nơi nhận" (bản cứng / bản scan) của phiếu nhu cầu, nhà máy (mã kho, ký hiệu số phiếu, GĐ phụ trách, bộ phận SSO thuộc nhà máy), đồng bộ SSO.
+- Cài đặt thông tin công ty in trên phiếu, dòng "Kính gửi" và "Nơi nhận" (bản cứng / bản scan) của phiếu nhu cầu, kho (mã kho, mã kho phần mềm cũ, ký hiệu số phiếu, GĐ phụ trách), đồng bộ SSO.
 - Trang Tổng quan: "Việc cần tôi xử lý", thống kê theo trạng thái và theo nhà máy.
 
 ### Kỹ thuật
-- Chống CSRF cho mọi form, phiên đăng nhập lưu CSDL, cookie httpOnly, chỉ chuyển hướng trong nội bộ ứng dụng.
-- 36 bài kiểm thử tự động (`npm test`): toàn bộ quy trình, niêm phong báo giá, phân quyền theo nhà máy, xuất kho trừ tồn, xuất Excel, chặn CSRF, và các bài hồi quy cho đợt rà soát (khóa form, bộ lọc, cộng dồn tồn, an toàn đồng bộ SSO). CI GitHub Actions chạy test.
+- Chống CSRF cho mọi form, phiên đăng nhập lưu CSDL, cookie httpOnly, chỉ chuyển hướng trong nội bộ ứng dụng; cho SSO Portal nhúng app (`frame-ancestors`), có `/health` cho giám sát.
+- 55 bài kiểm thử tự động (`npm test`): toàn bộ quy trình, niêm phong báo giá, phân quyền theo nhà máy, xuất kho trừ tồn, xuất Excel, chặn CSRF, đăng nhập qua SSO Portal (dựng SSO giả), đồng bộ danh bạ, đơn vị có kho, nhân sự kho chỉ trong nhà máy, và các bài hồi quy cho các đợt rà soát. CI GitHub Actions chạy test.
 - Sao lưu: `npm run backup` tạo bản sao nhất quán của CSDL (`VACUUM INTO`, an toàn khi đang bật WAL) vào `BACKUP_DIR`; cần sao lưu kèm thư mục `UPLOAD_DIR` (tệp báo giá, tờ trình).
 
 ## 4. Kết nối SSO
 
-`SSO_MODE=mock` (mặc định): màn hình đăng nhập liệt kê danh bạ mẫu để chạy thử.
+Giống app Payroll, không cần sửa SSO. Khi có `SSO_BASE_URL` app chạy chế độ SSO Portal:
 
-`SSO_MODE=oidc`: đăng nhập OpenID Connect (Authorization Code + PKCE) và đồng bộ danh bạ định kỳ:
+- **Đăng nhập**: SSO Portal mở app kèm `?token=...`; app gọi `GET {SSO_BASE_URL}/api/auth/introspect?token=...` → `{ active, user: { id, username, email, displayName, role, status } }`, tạo phiên riêng của QLVT rồi bỏ token khỏi địa chỉ. Tài khoản bị khóa trên SSO không vào được; `role = admin` trên SSO là quản trị QLVT (`SSO_ADMIN_IS_ADMIN`). Mở thẳng một trang khi chưa đăng nhập thì màn hình hướng dẫn mở lại từ SSO Portal, vào xong quay về đúng trang đó.
+- **Danh bạ**: `GET {SSO_BASE_URL}/api/internal/directory` (header `X-Internal-Secret: SSO_INTERNAL_API_SECRET`) → `{ users: [{ id, name, username, email, status }], departments: [{ id, name }], assignments: [{ userId, deptId, role }] }`. Đồng bộ lúc khởi động, mỗi `SYNC_INTERVAL_MIN` phút, khi bấm "Đồng bộ ngay", khi người mới đăng nhập lần đầu, và khi SSO gọi `POST /api/internal/sync` (cùng header).
+- Tên SSO dạng "Chức vụ - Họ tên" / "Họ tên - NV bộ phận" được tách lấy họ tên. Chức vụ không gắn phòng (HĐQT, Ban kiểm soát, Giám đốc / Phó GĐ) gom vào đơn vị ảo. Người có nhiều phân công: đơn vị chính là phòng ban mình là nhân sự, chức vụ là chức vụ cao nhất.
+- An toàn: SSO trả về thiếu (rỗng hoặc ít hơn một nửa số đang có) thì không ngưng hoạt động ai và giữ nguyên phân công, chỉ cảnh báo. Đơn vị có kho không còn trên SSO thì cảnh báo, kho vẫn giữ.
+- Cấu hình: `SSO_BASE_URL`, `SSO_INTERNAL_API_SECRET` (trùng với SSO, như Payroll), `FRAME_ANCESTORS`, `SYNC_INTERVAL_MIN`; xem `.env.example`.
 
-- `GET {SSO_DIRECTORY_URL}/departments` → `[{ id, code, name }]`
-- `GET {SSO_DIRECTORY_URL}/positions` → `[{ id, code, name }]`
-- `GET {SSO_DIRECTORY_URL}/employees` → `[{ id, username, full_name, email, phone, department_id, position_id }]`
-
-(header `Authorization: Bearer SSO_DIRECTORY_TOKEN`; chấp nhận cả dạng `{ data: [...] }`, một số tên trường thay thế như `name`, `departmentId`). Cấu hình mẫu trong `.env.example`. Bộ phận SSO có mã trùng mã nhà máy được tự gán vào nhà máy đó.
+Không có `SSO_BASE_URL` thì chạy SSO giả lập (màn hình đăng nhập liệt kê danh bạ mẫu, cùng định dạng danh bạ thật). Khi `NODE_ENV=production` mà chưa cấu hình SSO Portal thì app không khởi động, tránh lỡ mở chế độ giả lập. Dòng `SSO_MODE` của bản trước (`oidc`) không còn dùng: còn trong `.env` thì app báo lỗi cấu hình và không khởi động, xóa dòng đó đi.
 
 ## 5. Chạy thử
 
 ```bash
 npm install
-npm run seed:demo                                   # danh bạ SSO giả lập + phân quyền mẫu
+npm run seed:demo                                   # danh bạ SSO giả lập, 5 nhà máy có kho, phân quyền mẫu
 npm run import:tonkho -- duong-dan/ton-kho-2026.xlsx # nạp tồn kho từ phần mềm cũ
 npm start                                           # http://localhost:3000
 ```
 
-Tài khoản demo: Quản trị hệ thống (toàn quyền), Quàng Văn Thư (lập phiếu Tà Cọ), Lò Văn Thìn (GĐ NM Tà Cọ), Trần Minh Khoa (TP Kỹ thuật), Phạm Văn Hảo (CB PKT), Nguyễn Văn Hùng / Lê Đắc Dần (Ban GĐ), Đỗ Thị Lan (TP Kế hoạch), Nguyễn Thị An / Vũ Đức Bình / Hoàng Văn Cường (NV Kế hoạch), Lường Thị Mai (Thủ kho Tà Cọ).
+Tài khoản demo: Quản trị hệ thống (toàn quyền), Quàng Văn Thư (lập phiếu Tà Cọ), Lò Văn Thìn (GĐ NM Tà Cọ), Trần Minh Khoa (TP Kỹ thuật), Phạm Văn Hảo (CB PKT), Nguyễn Văn Hùng / Lê Đắc Dần (Ban GĐ), Đỗ Thị Lan (TP Kế hoạch), Nguyễn Thị An / Vũ Đức Bình / Hoàng Văn Cường (NV Kế hoạch), Lường Thị Mai (Thủ kho Tà Cọ), Cầm Văn Sơn / Tòng Văn Phúc (Nậm Công 3); Lò Văn Thanh, Hồ Đăng Thành (Suối Sập 3), Vì Văn Long (Thoong Gót), Hà Văn Quý (Nà Tẩu) chưa được phân quyền để thử trang Nhân sự kho.
 
 ## 6. Đợt rà soát và sửa lỗi (07/10/2026)
 
@@ -134,10 +139,16 @@ Sau khi hoàn thiện chức năng, toàn bộ mã nguồn được rà soát l�
 - Phiếu đang chờ nhân viên báo giá hiện nhầm trong "Việc cần tôi xử lý" của TP Kế hoạch.
 - Nhập thêm vào dòng tồn đang âm (dữ liệu cũ) bị chặn; đổi ký hiệu số phiếu của một nhà máy có thể làm trùng số; mã kho trùng nhau khác hoa thường; sửa mã riêng của nhà máy đã ngưng hoạt động làm mã thành mã chung; chọn mã không có thông số xóa mất chữ người dùng tự gõ; `npm run backup` khi sai đường dẫn CSDL tạo file rỗng.
 
+**Rà soát phần kết nối SSO và đơn vị có kho** (08/10/2026), sửa thêm:
+- `SSO_MODE` sai (vd `oidc` của bản trước) hoặc đặt `mock` trong khi có `SSO_BASE_URL`: app báo lỗi cấu hình thay vì lặng lẽ chạy SSO giả lập.
+- Danh bạ SSO trả thiếu phân công phòng ban (lỗi, phân trang): giữ nguyên đơn vị của CBCNV thay vì làm mọi người rơi khỏi kho; người đã rời SSO bị bỏ khỏi nhân sự kho.
+- Phòng ban chỉ thấy trong phân công không còn ghi đè tên phòng ban đã có; tên viết tắt (BKS, GĐ, PGĐ, NV) cạnh chữ có dấu được nhận đúng khi làm sạch tên.
+- Tích kho cho đơn vị có tên gần giống nhà máy cũ (vd "Suối Sập 2", "Nậm Chiến 3") không lấy nhầm mã kho / ký hiệu số phiếu của nhà máy cũ; kho cũ khớp nhiều đơn vị thì chờ quản trị chọn.
+- Gắn lại kho cũ (đang giữ tồn kho) vào đơn vị lỡ tích nhầm trước đó; đổi đơn vị thì tên kho tự đặt đổi theo; nhãn "Quản trị (SSO)" cho người là quản trị trên SSO.
+
 ## 7. Việc còn lại / cần người dùng xác nhận
 
-- [ ] **Tên đầy đủ 3 nhà máy** theo mã kho KHONATAU, KHOSS3, KHOTG (đang tạm "NMTĐ Nậm Tàu", "NMTĐ SS3", "NMTĐ TG") và ký hiệu số phiếu từng nhà máy – sửa được trong Cài đặt.
-- [ ] **Thông tin API của SSO** (địa chỉ, client id, định dạng danh bạ) để chuyển sang `SSO_MODE=oidc`; nếu SSO không theo OIDC thì viết thêm adapter.
+- [ ] Khi triển khai: đặt `SSO_BASE_URL`, `SSO_INTERNAL_API_SECRET` giống Payroll, thêm QLVT vào danh sách ứng dụng của SSO Portal, rồi vào Cài đặt tích các đơn vị có kho và phân công nhân sự kho.
 - [ ] Logo SBM trên phiếu Excel (hiện là chữ "SBM").
 - [ ] Thông báo email / Zalo khi có phiếu chờ xử lý (hiện có danh sách "Việc cần tôi xử lý" trong app).
 - [ ] Xuất Excel bảng so sánh giá để trình ký ngoài.

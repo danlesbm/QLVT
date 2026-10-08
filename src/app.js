@@ -2,7 +2,9 @@
 const path = require('node:path');
 const express = require('express');
 const config = require('./config');
+const crypto = require('node:crypto');
 const { parseCookies, sessionMiddleware, requireLogin, csrfCheck } = require('./auth/session');
+const { runSync } = require('./sso');
 const view = require('./views/helpers');
 const { safeNext } = require('./services/util');
 
@@ -14,6 +16,19 @@ function createApp(db) {
   app.disable('x-powered-by');
   app.locals.h = view;
 
+  // Cho phép SSO Portal nhúng app trong iframe; chặn trình duyệt đoán sai loại nội dung
+  app.use((req, res, next) => {
+    res.set({ 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'same-origin', 'Content-Security-Policy': `frame-ancestors ${config.frameAncestors}` });
+    next();
+  });
+  app.get('/health', (req, res) => {
+    try {
+      db.one('SELECT 1');
+      res.json({ ok: true, service: 'qlvt' });
+    } catch (err) {
+      res.status(503).json({ ok: false, error: err.message });
+    }
+  });
   app.use('/static', express.static(path.join(__dirname, '..', 'public'), { maxAge: '1d' }));
   app.use('/vendor/bootstrap', express.static(path.join(__dirname, '..', 'node_modules', 'bootstrap', 'dist'), { maxAge: '7d' }));
   app.use('/vendor/icons', express.static(path.join(__dirname, '..', 'node_modules', 'bootstrap-icons', 'font'), { maxAge: '7d' }));
@@ -29,14 +44,26 @@ function createApp(db) {
       } catch {
         /* cookie hỏng: bỏ qua */
       }
-      res.clearCookie('qlvt_flash');
+      res.clearCookie('qlvt_flash', { httpOnly: true, sameSite: config.cookieSameSite, secure: config.cookieSecure });
     }
     res.locals.ssoMode = config.sso.mode;
-    res.flash = (type, message) => res.cookie('qlvt_flash', JSON.stringify({ type, message }), { httpOnly: true, sameSite: 'lax' });
+    res.locals.isAdmin = false;
+    res.flash = (type, message) => res.cookie('qlvt_flash', JSON.stringify({ type, message }), { httpOnly: true, sameSite: config.cookieSameSite, secure: config.cookieSecure });
     next();
   });
   app.use(express.urlencoded({ extended: true, limit: '2mb', parameterLimit: 20000 }));
   app.use(express.json());
+  // SSO gọi khi danh bạ thay đổi (header X-Internal-Secret = SSO_INTERNAL_API_SECRET), giống Payroll
+  app.post('/api/internal/sync', async (req, res) => {
+    const expected = Buffer.from(config.sso.internalSecret || '');
+    const got = Buffer.from(String(req.get('x-internal-secret') || ''));
+    if (!expected.length || got.length !== expected.length || !crypto.timingSafeEqual(got, expected)) return res.status(401).json({ ok: false, error: 'Sai secret nội bộ' });
+    try {
+      res.json({ ok: true, ...(await runSync(db)) });
+    } catch (err) {
+      res.status(502).json({ ok: false, error: err.message });
+    }
+  });
   app.use(sessionMiddleware(db));
   app.use(csrfCheck);
 

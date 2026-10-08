@@ -3,7 +3,7 @@ const express = require('express');
 const svc = require('../services/issues');
 const { issueWorkbook } = require('../exports/excel');
 const { toArray } = require('../services/util');
-const { factoriesFor, allFactories, sendWorkbook, forbidden } = require('./common');
+const { factoriesFor, allFactories, sendWorkbook, forbidden, noFactoryMessage } = require('./common');
 
 module.exports = (db) => {
   const r = express.Router();
@@ -45,7 +45,7 @@ module.exports = (db) => {
 
   r.get('/moi', (req, res) => {
     const factories = factoriesFor(db, req.access, 'issue.create');
-    if (!factories.length) return forbidden(res, 'Bạn chưa được phân quyền lập phiếu xuất kho.');
+    if (!factories.length) return forbidden(res, noFactoryMessage(db, 'lập phiếu xuất kho'));
     const f = factories.find((x) => x.id === Number(req.query.factory_id)) || factories.find((x) => x.id === req.user.home_factory_id) || factories[0];
     res.render('issues/form', {
       title: 'Lập phiếu xuất kho', factories,

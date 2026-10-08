@@ -2,6 +2,8 @@
 
 /**
  * Danh mục quyền. scoped=true: quyền gán theo nhà máy (hoặc toàn công ty khi không chọn nhà máy).
+ * plant=true: quyền vận hành kho của nhà máy (thủ kho, người tổng hợp, GĐ nhà máy): khi gán theo từng kho
+ * thì chỉ gán được (và chỉ có hiệu lực) cho người thuộc đơn vị SSO của kho đó; gán toàn công ty thì không giới hạn.
  */
 const PERMISSIONS = [
   { group: 'Hệ thống', code: 'admin.settings', label: 'Cài đặt hệ thống (nhà máy, thông tin công ty, đồng bộ SSO)' },
@@ -12,26 +14,29 @@ const PERMISSIONS = [
   { group: 'Mã vật tư', code: 'catalog.code_factory', label: 'Đánh mã vật tư riêng của nhà máy', scoped: true },
 
   { group: 'Tồn kho', code: 'stock.view', label: 'Xem tồn kho', scoped: true },
-  { group: 'Tồn kho', code: 'stock.edit', label: 'Nhập thêm / điều chỉnh vật tư trong kho', scoped: true },
+  { group: 'Tồn kho', code: 'stock.edit', label: 'Nhập thêm / điều chỉnh vật tư trong kho', scoped: true, plant: true },
   { group: 'Tồn kho', code: 'stock.import', label: 'Import tồn kho từ Excel phần mềm cũ' },
 
   { group: 'Đề xuất vật tư', code: 'request.view', label: 'Xem phiếu đề xuất', scoped: true },
-  { group: 'Đề xuất vật tư', code: 'request.create', label: 'Lập phiếu đề xuất (người tổng hợp của nhà máy)', scoped: true },
-  { group: 'Đề xuất vật tư', code: 'request.approve_factory', label: 'Giám đốc nhà máy xem xét phiếu', scoped: true },
+  { group: 'Đề xuất vật tư', code: 'request.create', label: 'Lập phiếu đề xuất (người tổng hợp của nhà máy)', scoped: true, plant: true },
+  { group: 'Đề xuất vật tư', code: 'request.approve_factory', label: 'Giám đốc nhà máy xem xét phiếu', scoped: true, plant: true },
   { group: 'Đề xuất vật tư', code: 'request.pkt_head', label: 'Trưởng phòng Kỹ thuật: phân công kiểm soát, duyệt lần 1' },
   { group: 'Đề xuất vật tư', code: 'request.pkt_review', label: 'Cán bộ PKT kiểm soát vật tư (được phân công)' },
   { group: 'Đề xuất vật tư', code: 'request.approve_director', label: 'Giám đốc / Phó giám đốc: duyệt nhu cầu, duyệt giá' },
-  { group: 'Đề xuất vật tư', code: 'request.receive', label: 'Nhà máy nhận hàng và kiểm tra hàng', scoped: true },
+  { group: 'Đề xuất vật tư', code: 'request.receive', label: 'Nhà máy nhận hàng và kiểm tra hàng', scoped: true, plant: true },
 
   { group: 'Mua sắm', code: 'purchase.head', label: 'Trưởng phòng Kế hoạch: nhận phiếu, giao báo giá, giao tổng hợp' },
   { group: 'Mua sắm', code: 'purchase.staff', label: 'Nhân viên Phòng Kế hoạch: báo giá, mua sắm, chuyển hàng' },
 
   { group: 'Xuất kho', code: 'issue.view', label: 'Xem phiếu xuất kho', scoped: true },
-  { group: 'Xuất kho', code: 'issue.create', label: 'Lập phiếu xuất kho (thủ kho / người được phân công)', scoped: true },
-  { group: 'Xuất kho', code: 'issue.approve', label: 'Giám đốc nhà máy duyệt phiếu xuất kho', scoped: true },
+  { group: 'Xuất kho', code: 'issue.create', label: 'Lập phiếu xuất kho (thủ kho / người được phân công)', scoped: true, plant: true },
+  { group: 'Xuất kho', code: 'issue.approve', label: 'Giám đốc nhà máy duyệt phiếu xuất kho', scoped: true, plant: true },
 ];
 
 const BY_CODE = Object.fromEntries(PERMISSIONS.map((p) => [p.code, p]));
+const PLANT_PERMS = new Set(PERMISSIONS.filter((p) => p.plant).map((p) => p.code));
+/** Nhóm quyền có quyền vận hành kho: gán theo kho thì chỉ cho người thuộc kho đó. */
+const isPlantRole = (perms) => (typeof perms === 'string' ? JSON.parse(perms) : perms).some((p) => PLANT_PERMS.has(p));
 
 /** Nhóm quyền mặc định tạo khi khởi tạo CSDL; quản trị có thể sửa hoặc tạo thêm. */
 const DEFAULT_ROLES = [
@@ -47,4 +52,4 @@ const DEFAULT_ROLES = [
   { name: 'Nhân viên Phòng Kế hoạch', description: 'Báo giá, mua sắm, chuyển hàng', permissions: ['catalog.view', 'stock.view', 'request.view', 'purchase.staff'] },
 ];
 
-module.exports = { PERMISSIONS, BY_CODE, DEFAULT_ROLES };
+module.exports = { PERMISSIONS, BY_CODE, DEFAULT_ROLES, PLANT_PERMS, isPlantRole };

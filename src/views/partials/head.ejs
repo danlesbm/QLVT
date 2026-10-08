@@ -37,7 +37,7 @@
       <div class="fw-semibold text-truncate"><%= title %></div>
       <div class="ms-auto d-flex align-items-center gap-2">
         <div class="text-end lh-sm d-none d-sm-block">
-          <div class="fw-semibold"><%= user.full_name %><% if (user.is_admin) { %> <span class="badge text-bg-dark">Quản trị</span><% } %></div>
+          <div class="fw-semibold"><%= user.full_name %><% if (isAdmin) { %> <span class="badge text-bg-dark">Quản trị</span><% } %></div>
           <div class="small text-muted"><%= [user.position_name, user.department_name].filter(Boolean).join(' · ') %></div>
         </div>
         <form method="post" action="/logout"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="btn btn-sm btn-outline-secondary" title="Đăng xuất"><i class="bi bi-box-arrow-right"></i></button></form>

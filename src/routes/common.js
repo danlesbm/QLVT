@@ -39,8 +39,15 @@ async function sendWorkbook(res, wb, filename) {
   res.end();
 }
 
+/** Thông báo khi người dùng không lập được phiếu ở kho nào (chưa có kho nào hoặc chưa được phân quyền). */
+function noFactoryMessage(db, what) {
+  return db.one('SELECT 1 FROM factories WHERE active = 1')
+    ? `Bạn chưa được phân quyền ${what}.`
+    : 'Chưa có kho nào: quản trị vào Cài đặt › Đơn vị có kho để tích các đơn vị (nhà máy) có kho.';
+}
+
 function forbidden(res, message = 'Bạn không có quyền truy cập chức năng này.') {
   return res.status(403).render('error', { title: 'Không có quyền', message });
 }
 
-module.exports = { factoriesFor, allFactories, upload, fixName, memoryUpload, sendWorkbook, forbidden };
+module.exports = { factoriesFor, allFactories, upload, fixName, memoryUpload, sendWorkbook, forbidden, noFactoryMessage };
